@@ -1,8 +1,8 @@
-# FEAD Belt Drive System — Technical Analysis Web Application
+﻿# FEAD Belt Drive System — Technical Analysis Web Application
 
 > **Front End Accessory Drive (FEAD) engineering analysis tool for the Ashok Leyland H6 engine with Gates MT820 8PK AMD Aramid belt.**
 
-[![GitHub Pages](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-blue?logo=github)](https://YOUR-USERNAME.github.io/fead-belt-drive-system/)
+[![GitHub Pages](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-blue?logo=github)](https://ricardomessi.github.io/fead-belt-drive-system/)
 
 ---
 
@@ -80,7 +80,7 @@ All libraries load from CDN (Chart.js, Three.js, jsPDF, SheetJS).
 ## 🌐 Live on GitHub Pages
 
 This site is deployed via GitHub Pages.  
-→ **[Open Live App](https://YOUR-USERNAME.github.io/fead-belt-drive-system/)**
+→ **[Open Live App](https://ricardomessi.github.io/fead-belt-drive-system/)**
 
 ---
 
