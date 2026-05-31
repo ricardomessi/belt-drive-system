@@ -1,0 +1,573 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gates Belt Drive – Hub Load Calculator</title>
+  <meta name="description" content="Interactive Gates Accessory Belt Drive hub-load calculator for Ashok Leyland H6 engine with live 2D, 3D models, gear-driven accessories and hub-load vs RPM chart."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="index.css"/>
+</head>
+<body>
+
+<!-- ── Header ───────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="header-inner">
+    <div class="brand">
+      <svg class="brand-icon" viewBox="0 0 52 52" fill="none">
+        <circle cx="26" cy="26" r="24" stroke="#e63946" stroke-width="2.5"/>
+        <circle cx="26" cy="26" r="14" stroke="#e63946" stroke-width="1.5" stroke-dasharray="6 3"/>
+        <circle cx="26" cy="26" r="5" fill="#e63946"/>
+        <path d="M26 6 L26 2 M26 46 L26 50 M6 26 L2 26 M46 26 L50 26" stroke="#e63946" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <h1>Gates™ Belt Drive Hub-Load Calculator</h1>
+        <p class="subtitle">Ashok Leyland H6 · 24V Fan 1.3SR 130CC · Belt MT620 AMD / 8-Rib Aramid</p>
+      </div>
+    </div>
+    <div class="header-badges">
+      <div class="badge-group">
+        <span class="badge">Belt Length: 1577 mm</span>
+        <span class="badge">Design Tension: 480 N</span>
+        <span class="badge badge-live">● LIVE COMPUTING</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ── Main Content ──────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- Row 1: Full-width 2D Canvas -->
+  <div class="row row-canvas-full">
+    <section class="card card-canvas" aria-label="2D Live Working Model">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">⬡</span>
+          <h2 class="card-title">2-D Live Working Model</h2>
+        </div>
+        <div class="canvas-header-right">
+          <span class="canvas-hint">Hover any pulley for details · Arrow length = hub force · Belt width = load</span>
+          <span class="card-sub">Animates in real-time — adjust parameters below</span>
+        </div>
+      </div>
+      <!-- Canvas fills full width -->
+      <div class="canvas-wrap" style="position:relative">
+        <canvas id="canvas2d" class="live-canvas"></canvas>
+        <!-- Interactive hover tooltip drawn over canvas -->
+        <div id="canvas-pulley-tip" class="canvas-pulley-tip" style="display:none"></div>
+      </div>
+      <div class="canvas-legend">
+        <span class="leg-item" style="--c:#ffd700">▬ Belt spans (speed-animated)</span>
+        <span class="leg-item" style="--c:#e63946">→ Hub-load vectors</span>
+        <span class="leg-item" style="--c:#4fc3f7">● CRK · FAN · IDR</span>
+        <span class="leg-item" style="--c:#34d399">● ALT · AC · TEN</span>
+        <span class="leg-item" style="--c:#8ca0bc">Hover a pulley to inspect its data</span>
+      </div>
+    </section>
+  </div>
+
+  <!-- Row 2: Controls (3 sliders horizontal) + Gear-Driven side by side -->
+  <div class="row row-controls-gear">
+
+    <!-- Drive Parameters - 3 sliders horizontal -->
+    <section class="card card-controls" aria-label="Interactive Controls">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">⚙</span>
+          <h2 class="card-title">Drive Parameters</h2>
+        </div>
+        <button id="download-excel" class="btn btn-primary btn-sm">⬇ Export Excel (.xlsx)</button>
+      </div>
+      <div class="controls-body">
+        <!-- 3 sliders in a horizontal row -->
+        <div class="sliders-row">
+
+          <div class="ctrl-group">
+            <div class="ctrl-header">
+              <div class="ctrl-label-row">
+                <label for="rpm">Engine Speed</label>
+                <span class="info-chip" data-tip="rpm">ℹ</span>
+              </div>
+              <span id="lbl-rpm" class="ctrl-val">1200 RPM</span>
+            </div>
+            <input type="range" id="rpm" min="300" max="2600" step="10" value="1200" class="slider"/>
+            <div class="slider-marks"><span>300</span><span>1000</span><span>1600</span><span>2600</span></div>
+            <div class="ctrl-hint">Higher RPM → faster belt → lower span tension (T=P/v).</div>
+          </div>
+
+          <div class="ctrl-group">
+            <div class="ctrl-header">
+              <div class="ctrl-label-row">
+                <label for="tension">Static Belt Tension</label>
+                <span class="info-chip" data-tip="tension">ℹ</span>
+              </div>
+              <span id="lbl-tension" class="ctrl-val">2500 N</span>
+            </div>
+            <input type="range" id="tension" min="200" max="5000" step="10" value="2500" class="slider"/>
+            <div class="slider-marks"><span>200 N</span><span>480 N design</span><span>5000 N</span></div>
+            <div class="ctrl-hint">Scales all span tensions proportionally → hub forces rise linearly.</div>
+          </div>
+
+          <div class="ctrl-group">
+            <div class="ctrl-header">
+              <div class="ctrl-label-row">
+                <label for="tensioner">Tensioner Arm</label>
+                <span class="info-chip" data-tip="tensioner">ℹ</span>
+              </div>
+              <span id="lbl-tensioner" class="ctrl-val">MEAN (15.4°)</span>
+            </div>
+            <input type="range" id="tensioner" min="0" max="5" step="1" value="3" class="slider"/>
+            <div class="slider-marks"><span>FREE</span><span>REPLACE</span><span>MAX</span><span>MEAN</span><span>MIN</span><span>LOAD</span></div>
+            <div class="ctrl-hint">Moves tensioner pulley XY → changes belt geometry and all wrap angles.</div>
+          </div>
+
+        </div><!-- end sliders-row -->
+
+        <!-- Design params compact strip -->
+        <div class="design-params-strip">
+          <span class="dp-item"><span class="dp-lbl">Pivot</span><span class="dp-val mono">(-240, 72) mm</span></span>
+          <span class="dp-item"><span class="dp-lbl">Arm Length</span><span class="dp-val mono">90.0 mm</span></span>
+          <span class="dp-item"><span class="dp-lbl">Spring Rate</span><span class="dp-val mono">0.883 Nm/°</span></span>
+          <span class="dp-item"><span class="dp-lbl">Preload</span><span class="dp-val mono">19.49 Nm</span></span>
+          <span class="dp-item"><span class="dp-lbl">Mean Load</span><span class="dp-val mono">34.12 Nm</span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Gear-Driven Accessories -->
+    <section class="card card-gear" aria-label="Gear-Driven Accessories">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">⚙</span>
+          <h2 class="card-title">Gear-Driven Accessories</h2>
+        </div>
+        <span class="card-sub">Via geartrain → CRK hub load</span>
+      </div>
+      <div class="gear-body">
+        <p class="gear-note">Toggle accessories — their power demand shifts through the geartrain and directly raises the CRK hub force:</p>
+
+        <div class="gear-items">
+
+          <div class="gear-item" data-gear="oilpump">
+            <div class="gear-check-wrap">
+              <input type="checkbox" id="gear-oilpump" class="gear-checkbox" data-gear="oilpump"/>
+              <label for="gear-oilpump" class="gear-label">
+                <span class="gear-name">Oil Pump</span>
+                <span class="gear-spec">Gear ratio 1.2:1 · ~3 kW</span>
+              </label>
+            </div>
+            <div class="gear-slider-wrap" id="gs-oilpump-wrap">
+              <input type="range" id="gs-oilpump" min="0.5" max="6" step="0.1" value="3" class="gear-slider"/>
+              <span id="gs-oilpump-lbl" class="gear-kw">3.0 kW</span>
+            </div>
+          </div>
+
+          <div class="gear-item" data-gear="waterpump">
+            <div class="gear-check-wrap">
+              <input type="checkbox" id="gear-waterpump" class="gear-checkbox" data-gear="waterpump"/>
+              <label for="gear-waterpump" class="gear-label">
+                <span class="gear-name">Water Pump</span>
+                <span class="gear-spec">Gear ratio 1.35:1 · ~2 kW</span>
+              </label>
+            </div>
+            <div class="gear-slider-wrap" id="gs-waterpump-wrap">
+              <input type="range" id="gs-waterpump" min="0.2" max="5" step="0.1" value="2" class="gear-slider"/>
+              <span id="gs-waterpump-lbl" class="gear-kw">2.0 kW</span>
+            </div>
+          </div>
+
+          <div class="gear-item" data-gear="aircomp">
+            <div class="gear-check-wrap">
+              <input type="checkbox" id="gear-aircomp" class="gear-checkbox" data-gear="aircomp"/>
+              <label for="gear-aircomp" class="gear-label">
+                <span class="gear-name">Air Compressor</span>
+                <span class="gear-spec">Gear ratio 1.0:1 · ~5 kW</span>
+              </label>
+            </div>
+            <div class="gear-slider-wrap" id="gs-aircomp-wrap">
+              <input type="range" id="gs-aircomp" min="1" max="12" step="0.5" value="5" class="gear-slider"/>
+              <span id="gs-aircomp-lbl" class="gear-kw">5.0 kW</span>
+            </div>
+          </div>
+
+          <div class="gear-item" data-gear="pspump">
+            <div class="gear-check-wrap">
+              <input type="checkbox" id="gear-pspump" class="gear-checkbox" data-gear="pspump"/>
+              <label for="gear-pspump" class="gear-label">
+                <span class="gear-name">Power Steering Pump</span>
+                <span class="gear-spec">Gear ratio 1.15:1 · ~2.5 kW</span>
+              </label>
+            </div>
+            <div class="gear-slider-wrap" id="gs-pspump-wrap">
+              <input type="range" id="gs-pspump" min="0.5" max="8" step="0.1" value="2.5" class="gear-slider"/>
+              <span id="gs-pspump-lbl" class="gear-kw">2.5 kW</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Gear Load Summary -->
+        <div class="gear-summary">
+          <div class="gear-summary-item">
+            <span class="gs-label">Total Gear Load</span>
+            <span id="gear-total-kw" class="gs-val">0.0 kW</span>
+          </div>
+          <div class="gear-summary-item">
+            <span class="gs-label">CRK Extra Torque</span>
+            <span id="gear-crk-torque" class="gs-val">0.0 Nm</span>
+          </div>
+          <div class="gear-summary-item">
+            <span class="gs-label">ΔF on CRK Hub</span>
+            <span id="gear-crk-df" class="gs-val gs-delta">+0 N</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+  </div> <!-- end row-controls-gear -->
+
+  <!-- Row 2: Live Insights Panel -->
+  <div class="row row-insights">
+    <section class="card card-insights" aria-label="Live System Insights">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">💡</span>
+          <h2 class="card-title">Live System Insights</h2>
+        </div>
+        <span class="card-sub" id="insights-rpm-label">@ 1200 RPM</span>
+      </div>
+      <div id="insights-body" class="insights-body">
+        <div class="insight-card" id="ins-velocity"><span class="ins-tag">BELT</span><span class="ins-text" id="ins-velocity-text">—</span></div>
+        <div class="insight-card" id="ins-crk"><span class="ins-tag" style="--tc:#4fc3f7">CRK</span><span class="ins-text" id="ins-crk-text">—</span></div>
+        <div class="insight-card" id="ins-tension"><span class="ins-tag" style="--tc:#f4d03f">TENSION</span><span class="ins-text" id="ins-tension-text">—</span></div>
+        <div class="insight-card" id="ins-gear"><span class="ins-tag" style="--tc:#f4a261">GEAR</span><span class="ins-text" id="ins-gear-text">No gear-driven accessories active.</span></div>
+        <div class="insight-card" id="ins-tensioner"><span class="ins-tag" style="--tc:#f472b6">TENS ARM</span><span class="ins-text" id="ins-tensioner-text">—</span></div>
+        <div class="insight-card" id="ins-peak"><span class="ins-tag" style="--tc:#e63946">PEAK LOAD</span><span class="ins-text" id="ins-peak-text">—</span></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Row 3: Operating Mode Presets -->
+  <div class="row row-opmodes">
+    <section class="card card-opmodes" aria-label="Operating Mode Analysis">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">🎮</span>
+          <h2 class="card-title">Operating Condition Presets</h2>
+        </div>
+        <span class="card-sub">Click a mode to simulate real-world loading — hub loads update live with explanation</span>
+      </div>
+      <div class="opmodes-grid" id="opmodes-grid"></div>
+      <div id="opmode-detail" class="opmode-detail" style="display:none">
+        <div class="opmode-detail-header">
+          <span id="opmode-detail-icon" class="opmode-detail-icon"></span>
+          <div class="opmode-detail-titles">
+            <div id="opmode-detail-name" class="opmode-detail-name"></div>
+            <div id="opmode-detail-scenario" class="opmode-detail-scenario"></div>
+          </div>
+          <button class="opmode-close" id="opmode-close">&times;</button>
+        </div>
+        <div class="opmode-detail-body">
+          <div class="opmode-mech-block">
+            <div class="opmode-mech-label">⚡ Physics — Why hub loads change</div>
+            <div id="opmode-detail-mechanism" class="opmode-mech-text"></div>
+          </div>
+          <div class="opmode-risks-block">
+            <div class="opmode-mech-label">⚠ Key risks at this condition</div>
+            <ul id="opmode-detail-risks" class="opmode-risks-list"></ul>
+          </div>
+          <div class="opmode-results-block" id="opmode-results"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Row 4: Hub-Load Table (full width) -->
+  <div class="row row-table">
+    <section class="card card-table" aria-label="Hub-Load Calculations">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">≡</span>
+          <h2 class="card-title">Hub-Load Calculations</h2>
+        </div>
+        <span class="card-sub">Click column headers to sort &middot; Click a row for pulley detail &middot; <span style="color:var(--green)">Green ΔF &lt; &plusmn;300 N</span> &middot; <span style="color:#f87171">Red ΔF &gt; &plusmn;300 N</span></span>
+      </div>
+      <div id="calc-table" class="table-wrap"></div>
+
+      <!-- Formula Reference Grid -->
+      <div class="formula-section">
+        <div class="formula-section-title">Physics Reference — Formulas Used in this Calculator</div>
+        <div class="formula-grid">
+
+          <div class="fml-card">
+            <div class="fml-number">01</div>
+            <div class="fml-name">Belt Linear Velocity</div>
+            <div class="fml-eq">v = π · D<sub>eff</sub> · n / 60 000</div>
+            <div class="fml-units">v [m/s] · D<sub>eff</sub> [mm] · n [RPM]</div>
+            <div class="fml-why">Higher RPM or larger crankshaft pulley diameter produces a faster belt. All span tensions scale with belt speed.</div>
+          </div>
+
+          <div class="fml-card">
+            <div class="fml-number">02</div>
+            <div class="fml-name">Span Effective Tension</div>
+            <div class="fml-eq">T<sub>eff</sub> = P<sub>kW</sub> × 1000 / v</div>
+            <div class="fml-units">T [N] · P [kW] · v [m/s]</div>
+            <div class="fml-why">Power drawn by each accessory creates a tension difference across the pulley. Faster belt at same power means lower tension.</div>
+          </div>
+
+          <div class="fml-card">
+            <div class="fml-number">03</div>
+            <div class="fml-name">Hub Force Components</div>
+            <div class="fml-eq">F<sub>x</sub> = T<sub>in</sub>·cos θ<sub>in</sub> + T<sub>out</sub>·cos θ<sub>out</sub></div>
+            <div class="fml-units">F<sub>y</sub> = T<sub>in</sub>·sin θ<sub>in</sub> + T<sub>out</sub>·sin θ<sub>out</sub></div>
+            <div class="fml-why">The two incoming and outgoing belt spans each pull the pulley shaft. Their vector sum is the hub bearing load.</div>
+          </div>
+
+          <div class="fml-card">
+            <div class="fml-number">04</div>
+            <div class="fml-name">Resultant Hub Force</div>
+            <div class="fml-eq">F<sub>hub</sub> = √( F<sub>x</sub>² + F<sub>y</sub>² )</div>
+            <div class="fml-units">F [N] · Direction θ = atan2(F<sub>y</sub>, F<sub>x</sub>)·180/π [°]</div>
+            <div class="fml-why">This is the actual force the belt exerts on the bearing. Exceeding the bearing rated load causes premature failure.</div>
+          </div>
+
+          <div class="fml-card">
+            <div class="fml-number">05</div>
+            <div class="fml-name">Speed Ratio</div>
+            <div class="fml-eq">SR = D<sub>CRK,eff</sub> / D<sub>pulley,eff</sub></div>
+            <div class="fml-units">Pulley RPM = Engine RPM × SR</div>
+            <div class="fml-why">The ratio of crankshaft to driven pulley diameter determines how fast each accessory spins relative to engine speed.</div>
+          </div>
+
+          <div class="fml-card">
+            <div class="fml-number">06</div>
+            <div class="fml-name">Gear-Driven Load on CRK</div>
+            <div class="fml-eq">ΔT = P<sub>gear</sub> × 1000 / v<sub>belt</sub></div>
+            <div class="fml-units">Torque τ = P / ω · ω = 2π·n/60 [rad/s]</div>
+            <div class="fml-why">Gear-driven accessories (oil pump, water pump etc.) load the crankshaft directly, adding to the tight-side belt tension and increasing CRK hub force.</div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Row 4: Hub-Load vs RPM Chart (full width) -->
+  <div class="row row-chart">
+    <section class="card card-chart" aria-label="Hub-Load vs RPM Chart">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">📈</span>
+          <h2 class="card-title">Hub-Load vs Engine Speed</h2>
+        </div>
+        <div class="chart-controls">
+          <span class="card-sub">Toggle pulleys · Vertical marker = current RPM · Shaded = gear-load contribution</span>
+          <div class="chart-toggles" id="chart-toggles"></div>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="hubload-chart"></canvas>
+      </div>
+      <div class="chart-note">The vertical dashed line tracks your current engine speed across the curves. Enable gear-driven accessories above to see how each curve shifts upward for CRK.</div>
+    </section>
+  </div>
+
+  <!-- Row 5: Drive Cycle Analysis -->
+  <div class="row row-drivecycle">
+    <section class="card card-drivecycle" aria-label="Drive Cycle Analysis">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">📊</span>
+          <h2 class="card-title">Drive Cycle Hub-Load Analysis</h2>
+        </div>
+        <div class="cycle-header-right">
+          <span class="card-sub">WLTC vs NEDC &mdash; Hub loads across the full test cycle &middot; Worst-case markers shown</span>
+          <div class="cycle-tab-row">
+            <button class="cycle-tab active" data-cycle="COMPARE" id="ctab-compare">Both Cycles</button>
+            <button class="cycle-tab" data-cycle="WLTC" id="ctab-wltc">WLTC</button>
+            <button class="cycle-tab" data-cycle="NEDC" id="ctab-nedc">NEDC</button>
+          </div>
+        </div>
+      </div>
+      <!-- Summary stats row -->
+      <div class="cycle-stats" id="cycle-stats"></div>
+      <!-- Chart -->
+      <div class="cycle-chart-wrap">
+        <canvas id="drivecycle-chart"></canvas>
+      </div>
+      <!-- Phase legend -->
+      <div class="cycle-phase-legend" id="cycle-phase-legend"></div>
+      <!-- Worst-case table -->
+      <div class="cycle-worst-wrap">
+        <div class="cycle-worst-title">⚠ Worst-Case Hub Loads by Operating Condition</div>
+        <div class="cycle-worst-grid" id="cycle-worst-grid"></div>
+      </div>
+    </section>
+  </div>
+
+
+
+
+  <!-- ═══ IDEAL WORKING CONDITION & COMPLIANCE DASHBOARD ═══ -->
+  <div class="row row-compliance">
+    <section class="card card-compliance" aria-label="Ideal Working Condition Dashboard">
+
+      <!-- Header -->
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">&#10003;</span>
+          <h2 class="card-title">Ideal Working Condition &amp; System Compliance</h2>
+        </div>
+        <div class="compliance-header-right">
+          <span class="card-sub">Live compliance scoring &middot; Design envelope check &middot; Maintenance schedule &middot; One-click ideal settings</span>
+          <button class="btn-apply-ideal" id="btn-apply-ideal">&#9654; Apply Ideal Settings</button>
+          <button class="btn-pdf-report" id="btn-pdf-report">&#128196; Download PDF Report</button>
+        </div>
+      </div>
+
+      <!-- Verdict Banner -->
+      <div id="compliance-verdict" class="compliance-verdict"></div>
+
+      <!-- Top 3 columns -->
+      <div class="compliance-top">
+
+        <!-- Col 1: Radar Chart -->
+        <div class="compliance-panel compliance-radar-panel">
+          <div class="compliance-panel-title">&#127919; System Performance Radar</div>
+          <div class="radar-wrap">
+            <canvas id="compliance-radar"></canvas>
+          </div>
+          <div class="radar-legend">
+            <span class="rl-item"><span class="rl-dot" style="background:#34d399"></span>Current</span>
+            <span class="rl-item"><span class="rl-dot" style="background:#4fc3f7"></span>Ideal</span>
+          </div>
+        </div>
+
+        <!-- Col 2: Parameter Compliance Table -->
+        <div class="compliance-panel compliance-table-panel">
+          <div class="compliance-panel-title">&#128202; Design Envelope — Current vs Ideal</div>
+          <div id="compliance-param-table"></div>
+        </div>
+
+        <!-- Col 3: Score + Breakdown -->
+        <div class="compliance-panel compliance-score-panel">
+          <div class="compliance-panel-title">&#127942; Compliance Score</div>
+          <div id="compliance-score-ring" class="compliance-score-ring"></div>
+          <div id="compliance-score-breakdown" class="compliance-score-breakdown"></div>
+        </div>
+
+      </div>
+
+      <!-- Middle: Ideal Settings Preset + Current State -->
+      <div class="compliance-mid" id="compliance-mid"></div>
+
+      <!-- Bottom: Maintenance Schedule -->
+      <div class="compliance-maintenance">
+        <div class="compliance-maintenance-title">&#128295; Maintenance Schedule &amp; Service Intervals</div>
+        <div id="compliance-maintenance-grid" class="compliance-maintenance-grid"></div>
+      </div>
+
+      <!-- Bottom: Design Rules Reference -->
+      <div class="compliance-rules">
+        <div class="compliance-rules-title">&#128220; Design Rules — Gates / ISO 9981 / C&amp;U Compliance</div>
+        <div class="compliance-rules-grid" id="compliance-rules-grid"></div>
+      </div>
+
+    </section>
+  </div>
+  <!-- FEAD EFFICIENCY DASHBOARD -->
+  <div class="row row-fead">
+    <section class="card card-fead" aria-label="FEAD Efficiency Dashboard">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">&#9881;</span>
+          <h2 class="card-title">FEAD Efficiency Dashboard</h2>
+        </div>
+        <span class="card-sub">Front End Accessory Drive &mdash; Parasitic loss analysis &middot; Belt slip margin &middot; Tension optimiser &middot; Design recommendations</span>
+      </div>
+      <div class="fead-kpi-strip" id="fead-kpis"></div>
+      <div class="fead-body">
+        <div class="fead-panel fead-panel-donut">
+          <div class="fead-panel-title">&#128267; Parasitic Power Breakdown</div>
+          <div class="fead-donut-wrap"><canvas id="fead-donut"></canvas></div>
+          <div id="fead-donut-legend" class="fead-donut-legend"></div>
+        </div>
+        <div class="fead-panel fead-panel-chart">
+          <div class="fead-panel-title">&#128200; Belt Efficiency &amp; Slip Safety vs Engine Speed</div>
+          <div class="fead-line-wrap"><canvas id="fead-line"></canvas></div>
+          <div class="fead-chart-note">Slip safety &lt;1.0 = belt slips. Optimal zone: 1.2&ndash;2.0. Efficiency drops at high RPM from centrifugal &amp; bending losses.</div>
+        </div>
+        <div class="fead-panel fead-panel-recs">
+          <div class="fead-panel-title">&#128161; Engineering Recommendations</div>
+          <div id="fead-recs" class="fead-recs-list"></div>
+        </div>
+      </div>
+      <div class="fead-tension-strip">
+        <div class="fead-tension-title">&#127919; Tension Optimiser &mdash; Ideal static tension for maximum efficiency</div>
+        <div class="fead-tension-body" id="fead-tension-body"></div>
+      </div>
+      <div class="fead-detail-wrap">
+        <div class="fead-detail-title">&#128203; Per-Pulley FEAD Analysis</div>
+        <div id="fead-detail-table"></div>
+      </div>
+      <div class="fead-formula-strip">
+        <div class="fead-formula-title">&#128208; FEAD Physics Reference</div>
+        <div class="fead-formula-grid">
+          <div class="fead-fml"><span class="fead-fml-name">Capstan Equation</span><span class="fead-fml-eq">T<sub>tight</sub> / T<sub>slack</sub> = e<sup>&mu;&theta;</sup></span><span class="fead-fml-why">Max tension ratio before slip. &mu; = friction coeff, &theta; = wrap angle (rad). Higher wrap &rarr; more grip.</span></div>
+          <div class="fead-fml"><span class="fead-fml-name">Slip Safety Factor</span><span class="fead-fml-eq">SF = ln(T<sub>tight</sub>/T<sub>slack</sub>) / (&mu;&theta;)</span><span class="fead-fml-why">SF &lt;1.0 &rarr; slip. Target SF &gt;1.3. Increasing tension raises SF but increases bearing loads.</span></div>
+          <div class="fead-fml"><span class="fead-fml-name">Belt Bending Loss</span><span class="fead-fml-eq">P<sub>bend</sub> = C<sub>b</sub> &middot; (T<sub>avg</sub>/R) &middot; v</span><span class="fead-fml-why">Hysteresis per pulley. Small R or high tension increases losses. Aramid cord reduces C<sub>b</sub> by ~30%.</span></div>
+          <div class="fead-fml"><span class="fead-fml-name">Centrifugal Tension</span><span class="fead-fml-eq">T<sub>c</sub> = m<sub>b</sub> &middot; v&sup2; / L</span><span class="fead-fml-why">Reduces effective clamping at high speed. Aramid (low mass) minimises. Critical above ~20 m/s.</span></div>
+          <div class="fead-fml"><span class="fead-fml-name">Bearing Friction Loss</span><span class="fead-fml-eq">P<sub>bear</sub> = &mu;<sub>b</sub> &middot; F<sub>hub</sub> &middot; &omega; &middot; R</span><span class="fead-fml-why">Proportional to hub load and speed. Reducing hub load directly reduces bearing losses &amp; extends L10 life.</span></div>
+          <div class="fead-fml"><span class="fead-fml-name">FEAD Efficiency</span><span class="fead-fml-eq">&eta; = P<sub>accessories</sub> / P<sub>CRK,total</sub></span><span class="fead-fml-why">Target &gt;96%. Losses: slip + bending + bearing + centrifugal. Aramid + optimal tension achieves 97&ndash;98.5%.</span></div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="row row-3d">
+    <section class="card card-3d" aria-label="3D Interactive Model">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">◈</span>
+          <h2 class="card-title">3-D Interactive Model</h2>
+        </div>
+        <span class="card-sub">Left-drag: orbit · Scroll: zoom · Right-drag: pan</span>
+      </div>
+      <div id="threejs-container"></div>
+      <div class="model-legend">
+        <span class="leg" style="color:#ffd700">▬ Belt (Gates® Micro-V)</span>
+        <span class="leg" style="color:#ff1493">→ Hub-Load Vectors</span>
+        <span class="leg" style="color:#4fc3f7">● CRK</span>
+        <span class="leg" style="color:#ff8c42">● FAN</span>
+        <span class="leg" style="color:#a78bfa">● IDR</span>
+        <span class="leg" style="color:#fbbf24">● ALT</span>
+        <span class="leg" style="color:#34d399">● AC</span>
+        <span class="leg" style="color:#f472b6">● TEN</span>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<!-- ── Footer ───────────────────────────────────────────────────── -->
+<footer class="footer">
+  <div class="footer-inner">
+    <span>Gates Accessory Belt Drive System · Ashok Leyland H6 · All values per PDF data sheet · DB Ver 2.45.0.0</span>
+    <span class="footer-right">Physics Engine: Real-time tangent geometry + hub-force vectors</span>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+<script src="app.js"></script>
+
+<!-- Global tooltip overlay -->
+<div id="tooltip-overlay" class="tooltip-overlay" role="tooltip" aria-hidden="true"></div>
+</body>
+</html>
