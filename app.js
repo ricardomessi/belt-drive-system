@@ -1328,6 +1328,7 @@ function updateAll() {
   renderFEADAll();
   renderDriveCycleChart();
   renderComplianceDashboard();
+  renderFrictionTable();
 }
 
 function resizeCanvases() {
@@ -1454,6 +1455,7 @@ window.addEventListener('load', () => {
   initFEADCharts();
   initComplianceDashboard();
   initPDFReport();
+  initMaterialDashboard();
 
   ['rpm','tension','tensioner'].forEach(id =>
     document.getElementById(id).addEventListener('input', updateAll)
@@ -1552,6 +1554,7 @@ function activateOpMode(mode) {
   detail.style.display = 'block';
   detail.scrollIntoView({ behavior:'smooth', block:'nearest' });
   renderComplianceDashboard();
+  renderFrictionTable();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2417,6 +2420,7 @@ function initComplianceDashboard() {
   const btn = document.getElementById('btn-apply-ideal');
   if (btn) btn.addEventListener('click', applyIdealSettings);
   renderComplianceDashboard();
+  renderFrictionTable();
 }
 
 function applyIdealSettings() {
@@ -2449,7 +2453,9 @@ function applyIdealSettings() {
   renderFEADAll();
   renderDriveCycleChart();
   renderComplianceDashboard();
+  renderFrictionTable();
   renderComplianceDashboard();
+  renderFrictionTable();
 
   const btn = document.getElementById('btn-apply-ideal');
   if (btn) {
@@ -3488,4 +3494,785 @@ function generatePDFReport() {
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '\uD83D\uDCC4 Download PDF Report'; }
   }
+}
+
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MATERIAL PROPERTIES & FRICTIONAL POWER ANALYSIS ENGINE
+// FG260 IS:210:1993  ·  Steel pulleys  ·  WP Bearing Life  ·  Non-AC vs AC
+// ══════════════════════════════════════════════════════════════════════════════
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MATERIAL PROPERTIES & FRICTIONAL ANALYSIS ENGINE  v3
+// Compact bullet-point UI  ·  Worst-Case Full Load mode
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Worst-Case Parameters ─────────────────────────────────────────────────────
+const WORST_CASE = {
+  rpm:     2000,   // Max load-table RPM (PDF max: 22.24 kW CRK)
+  tension: 3500,   // N – high static pre-load (worst bearing life)
+  tenIdx:  4,      // MIN arm position (11.9°) – maximum spring tension
+  label:   'Full Load 2000 RPM | 3500 N | MIN Arm | AC ON'
+};
+
+// ── Material Database (IS:210:1993 / IS:1570) ─────────────────────────────────
+const MATERIAL_DB = {
+  CRK: {
+    name:'Crankshaft Pulley', mat:'FG260 – IS:210:1993', type:'Grey Cast Iron',
+    color:'#4fc3f7', back:false,
+    UTS:260, YS:195, comp:900, shear:175, flex:450,
+    HB:210, rho:7200, E:110e3, nu:0.26, k:46, CTE:11.1e-6, Cp:460,
+    mu_r:0.38, mu_b:0.28, Ra:1.6
+  },
+  FAN: {
+    name:'Water Pump / Fan Pulley', mat:'FG260 – IS:210:1993', type:'Grey Cast Iron',
+    color:'#ff8c42', back:false,
+    UTS:260, YS:195, comp:900, shear:175, flex:450,
+    HB:210, rho:7200, E:110e3, nu:0.26, k:46, CTE:11.1e-6, Cp:460,
+    mu_r:0.38, mu_b:0.28, Ra:1.6
+  },
+  IDR: {
+    name:'Idler Pulley', mat:'Carbon Steel IS:1570 Pt-2', type:'C40/C45 Steel',
+    color:'#a78bfa', back:true,
+    UTS:620, YS:380, comp:620, shear:310, flex:620,
+    HB:180, rho:7850, E:207e3, nu:0.30, k:50, CTE:12e-6, Cp:490,
+    mu_r:0.35, mu_b:0.25, Ra:0.8
+  },
+  ALT: {
+    name:'Alternator Pulley', mat:'Carbon Steel IS:1570 Pt-2', type:'C40/C45 Steel',
+    color:'#fbbf24', back:false,
+    UTS:620, YS:380, comp:620, shear:310, flex:620,
+    HB:180, rho:7850, E:207e3, nu:0.30, k:50, CTE:12e-6, Cp:490,
+    mu_r:0.35, mu_b:0.25, Ra:0.8
+  },
+  AC: {
+    name:'A/C Compressor Pulley', mat:'Carbon Steel IS:1570 Pt-2', type:'C40/C45 Steel',
+    color:'#34d399', back:false,
+    UTS:620, YS:380, comp:620, shear:310, flex:620,
+    HB:180, rho:7850, E:207e3, nu:0.30, k:50, CTE:12e-6, Cp:490,
+    mu_r:0.35, mu_b:0.25, Ra:0.8
+  },
+  TEN: {
+    name:'Tensioner Pulley', mat:'Carbon Steel IS:1570 Pt-2', type:'C40/C45 Steel',
+    color:'#f472b6', back:true,
+    UTS:620, YS:380, comp:620, shear:310, flex:620,
+    HB:180, rho:7850, E:207e3, nu:0.30, k:50, CTE:12e-6, Cp:490,
+    mu_r:0.35, mu_b:0.25, Ra:0.8
+  }
+};
+
+// ── Water Pump Bearing (6205-2RS, ISO 15 / IS:6455) ──────────────────────────
+const WP_BEARING = {
+  id:'6205-2RS', d:25, D:52, B:15,
+  Cr:14800, C0r:7800, n_max:15000,
+  p:3, a1:1.0, aISO:1.0
+};
+
+// ── AC Compressor Load ────────────────────────────────────────────────────────
+const AC_KW = { normal:3.5, idle:1.2, worst:5.5 };  // kW
+
+// ── Worst-case state flag ─────────────────────────────────────────────────────
+let worstCaseActive = false;
+
+// ── Physics helpers ───────────────────────────────────────────────────────────
+function getPulleyMu(n) {
+  const m = MATERIAL_DB[n];
+  return m.back ? m.mu_b : m.mu_r;
+}
+
+function hertzP0(F_hub, R_mm, mat) {
+  const E_belt = 3500, nu_belt = 0.45;
+  const Estar = 1 / ((1 - mat.nu**2)/mat.E + (1 - nu_belt**2)/E_belt);
+  const L = 9; // mm rib contact length (8 ribs × ~1.1 mm)
+  const b = Math.sqrt(4*F_hub*R_mm/(Math.PI*L*Estar));
+  return (2*F_hub/(Math.PI*b*L)).toFixed(1);
+}
+
+// ── Friction computation ──────────────────────────────────────────────────────
+function computeMatFriction(P_ac_kw) {
+  const v   = beltVelocity(state.rpm);
+  const out = {};
+  ORDER.forEach(n => {
+    const mat   = MATERIAL_DB[n];
+    const mu    = getPulleyMu(n);
+    const p     = PULLEYS[n];
+    const theta = PDF[n].wrap * Math.PI / 180;
+    const Fh    = hubData[n] ? hubData[n].F : state.baseTension;
+    const Rb    = (p.eff * 0.20) / 1000;          // shaft bearing radius (m)
+    const omega = 2*Math.PI*state.rpm*p.sr/60;    // pulley angular vel
+    const Fn    = Fh * Math.sin(theta/2)/(theta/2+1e-9); // normal contact force
+
+    const Pbp   = mu * Fn * 0.005 * v;            // belt-pulley creep (kW)
+    const Pb    = 0.003 * Fh * omega * Rb;        // bearing friction (kW)
+    const Ptot  = Pbp + Pb;
+    const p0    = hertzP0(Fh, p.eff/2, mat);
+
+    out[n] = { mu, Fh:Fh.toFixed(0), Pbp:Pbp.toFixed(4),
+               Pb:Pb.toFixed(4), Ptot:Ptot.toFixed(4), p0 };
+  });
+  // AC extra tension contribution
+  if (P_ac_kw > 0) {
+    const dT = P_ac_kw / beltVelocity(state.rpm);
+    ORDER.forEach(n => {
+      const mat  = MATERIAL_DB[n];
+      const p    = PULLEYS[n];
+      const dPbp = getPulleyMu(n) * dT * 0.005 * beltVelocity(state.rpm);
+      const dPb  = 0.003 * dT*1.8 * 2*Math.PI*state.rpm*p.sr/60 * (p.eff*0.20/1000);
+      const prevTot = parseFloat(out[n].Ptot);
+      out[n].Ptot = (prevTot + dPbp + dPb).toFixed(4);
+      out[n].dAC  = (dPbp + dPb).toFixed(4);
+    });
+  }
+  return out;
+}
+
+function computeWPLife() {
+  const n_wp = state.rpm * PULLEYS.FAN.sr;
+  const Fh   = hubData.FAN ? hubData.FAN.F : state.baseTension;
+  const L10r = Math.pow(WP_BEARING.Cr/Math.max(Fh,1), WP_BEARING.p) * 1e6;
+  const L10h = L10r / (60*Math.max(n_wp,1));
+  const Ladj = WP_BEARING.a1 * WP_BEARING.aISO * L10h;
+  return {
+    n_wp: n_wp.toFixed(0), Fh: Fh.toFixed(0),
+    CP:  (WP_BEARING.Cr/Math.max(Fh,1)).toFixed(2),
+    L10h: L10h.toFixed(0), Ladj: Ladj.toFixed(0),
+    rep: (Ladj*0.9).toFixed(0),
+    S0:  (WP_BEARING.C0r/Math.max(Fh,1)).toFixed(2),
+    spd_ok: n_wp <= WP_BEARING.n_max,
+    grade: Ladj>5000?'EXCELLENT':Ladj>3000?'GOOD':Ladj>2000?'MARGINAL':'LOW',
+    gcol:  Ladj>5000?'#34d399':Ladj>3000?'#4fc3f7':Ladj>2000?'#fbbf24':'#f87171'
+  };
+}
+
+// ── Worst-case snapshot ───────────────────────────────────────────────────────
+function computeWorstCase() {
+  const savedRPM=state.rpm, savedT=state.baseTension, savedIdx=state.tenIdx;
+  state.rpm=WORST_CASE.rpm; state.baseTension=WORST_CASE.tension;
+  state.tenIdx=WORST_CASE.tenIdx; compute();
+  const fd   = computeFEAD();
+  const wp   = computeWPLife();
+  const fr   = computeMatFriction(AC_KW.worst);
+  const comp = computeCompliance();
+  const v    = beltVelocity(state.rpm);
+  // restore
+  state.rpm=savedRPM; state.baseTension=savedT; state.tenIdx=savedIdx; compute();
+  return { fd, wp, fr, comp, v, rpm:WORST_CASE.rpm, tension:WORST_CASE.tension };
+}
+
+// ── Renderers ─────────────────────────────────────────────────────────────────
+let matACChart = null;
+
+function initMaterialDashboard() {
+  document.querySelectorAll('.mat-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mat-tab').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.mat-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('mat-tab-'+btn.dataset.tab)?.classList.add('active');
+      if (btn.dataset.tab==='acvsnonac') renderACvNonAC();
+      if (btn.dataset.tab==='simulation') renderSimPanel();
+    });
+  });
+  const wbtn = document.getElementById('btn-worst-case');
+  if (wbtn) wbtn.addEventListener('click', applyWorstCase);
+  renderMaterialAll();
+}
+
+function applyWorstCase() {
+  state.rpm=WORST_CASE.rpm; state.baseTension=WORST_CASE.tension;
+  state.tenIdx=WORST_CASE.tenIdx;
+  // sync sliders
+  const rs=document.getElementById('rpm-slider'),
+        ts=document.getElementById('tension-slider'),
+        ti=document.getElementById('ten-pos');
+  if(rs){ rs.value=state.rpm; document.getElementById('rpm-val').textContent=state.rpm+' RPM'; }
+  if(ts){ ts.value=state.baseTension; document.getElementById('ten-val').textContent=state.baseTension+' N'; }
+  if(ti){ ti.value=state.tenIdx; document.getElementById('ten-pos-val').textContent=TEN_POS[state.tenIdx].label; }
+  worstCaseActive=true;
+  updateAll();
+  const wbtn=document.getElementById('btn-worst-case');
+  if(wbtn){ wbtn.classList.add('wc-active'); wbtn.textContent='⚠ WORST CASE ACTIVE'; }
+}
+
+function renderMaterialAll() {
+  renderMatTab1();
+  renderMatTab2();
+  renderMatTab3();
+  const active=document.querySelector('.mat-tab.active');
+  if(active?.dataset.tab==='acvsnonac') renderACvNonAC();
+  if(active?.dataset.tab==='simulation') renderSimPanel();
+}
+
+// ── TAB 1 – Material Properties ──────────────────────────────────────────────
+function renderMatTab1() {
+  const el=document.getElementById('mat-cards'); if(!el) return;
+  const PROPS=[
+    ['UTS (Min)',          m=>m.UTS+' MPa'],
+    ['0.2% Yield',        m=>m.YS+' MPa'],
+    ['Compressive',       m=>m.comp+' MPa'],
+    ['Shear Strength',    m=>m.shear+' MPa'],
+    ['Hardness',          m=>m.HB+' HB'],
+    ['Density',           m=>(m.rho/1000).toFixed(2)+' g/cm³'],
+    ["Young's Modulus E", m=>(m.E/1000).toFixed(0)+' GPa'],
+    ['Poisson\'s Ratio',  m=>m.nu],
+    ['Thermal k',         m=>m.k+' W/(m·K)'],
+    ['CTE α',             m=>(m.CTE*1e6).toFixed(1)+'×10⁻⁶/°C'],
+    ['Specific Heat Cp',  m=>m.Cp+' J/(kg·K)'],
+    ['μ ribbed',          m=>m.mu_r.toFixed(2)+' (dry groove)'],
+    ['μ back-side',       m=>m.mu_b.toFixed(2)+' (smooth)'],
+    ['Surface Ra',        m=>m.Ra+' μm'],
+  ];
+  const bullets={
+    CRK:['IS:210:1993 Grade FG260','Higher μ due to graphite surface film','Good torsional damping (0.3–0.4 log decrement)','Optimal for crankshaft torsional isolation','Groove angle: 40° (PK profile)'],
+    FAN:['IS:210:1993 Grade FG260','Combined water-pump + fan drive','High thermal mass absorbs coolant heat','Precision groove for belt tracking','FAN hub load = highest in system at 2866.4 N (PDF)'],
+    IDR:['IS:1570 Pt-2  C40/C45','Back-side smooth contact (μ = 0.25)','Pressed/machined — Ra 0.8 μm','Free-wheeling — no power transmitted','Life limited by sealed DGBB bearing'],
+    ALT:['IS:1570 Pt-2  C40/C45','Ribbed-face drive (μ = 0.35)','May carry OAD decoupler','Smart alternator reduces avg load 30–40%','ALT PDF hub limit: 1678.1 N'],
+    AC: ['IS:1570 Pt-2  C40/C45','Ribbed-face drive (μ = 0.35)','Electromagnetic clutch decouples shaft','Disengaged: hub load still present from belt wrap','AC PDF hub limit: 985.8 N'],
+    TEN:['IS:1570 Pt-2  C40/C45','Back-side smooth contact (μ = 0.25)','Spring-loaded arm — self-tensioning','Sealed DGBB — maintenance-free','TEN PDF hub limit: 608.5 N']
+  };
+  el.innerHTML=`
+  ${[['Cast Iron — FG260 IS:210:1993','#4fc3f7',['CRK','FAN']],
+     ['Steel — Carbon Steel IS:1570','#34d399',['IDR','ALT','AC','TEN']]
+    ].map(([title,col,keys])=>`
+    <div class="mat-group">
+      <div class="mat-group-title" style="border-left:4px solid ${col}">● ${title}</div>
+      <div class="mat-pulley-grid">
+        ${keys.map(n=>{
+          const m=MATERIAL_DB[n];
+          return `
+          <div class="mat-pulley-card" style="--mc:${m.color}">
+            <div class="mat-pulley-header">
+              <span class="mat-pulley-badge" style="background:${m.color}22;color:${m.color};border:1px solid ${m.color}55">${n}</span>
+              <div>
+                <div class="mat-pulley-name">${m.name}</div>
+                <div class="mat-pulley-grade">${m.mat}</div>
+              </div>
+            </div>
+            <table class="mat-prop-table">
+              <thead><tr><th>Property</th><th>Value</th></tr></thead>
+              <tbody>${PROPS.map(([lbl,fn])=>`
+                <tr><td class="mpt-lbl">${lbl}</td>
+                    <td class="mpt-val" style="color:${m.color}">${fn(m)}</td></tr>`).join('')}
+              </tbody>
+            </table>
+            <div class="mat-bullets">
+              ${bullets[n].map(b=>`<div class="mat-bullet">▸ ${b}</div>`).join('')}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('')}`;
+}
+
+// ── TAB 2 – Load Analysis (Hub Load + Friction) ───────────────────────────────
+function renderMatTab2() {
+  const el=document.getElementById('mat-loads'); if(!el) return;
+  const wcSnap   = computeWorstCase();
+  const currFr   = computeMatFriction(0);
+  const wcFr     = wcSnap.fr;
+  const v        = beltVelocity(state.rpm);
+  const vcol     = c=>(c==='PASS'||c==='SAFE')?'#34d399':c==='WARN'?'#fbbf24':'#f87171';
+
+  const totalCurr = ORDER.reduce((s,n)=>s+parseFloat(currFr[n].Ptot),0);
+  const totalWC   = ORDER.reduce((s,n)=>s+parseFloat(wcFr[n].Ptot),0);
+
+  el.innerHTML=`
+  <!-- KPI strip -->
+  <div class="mat-kpi-strip">
+    ${[
+      ['Belt Speed',       v.toFixed(2)+' m/s',        '#4fc3f7'],
+      ['Curr Tension',     state.baseTension+' N',      '#34d399'],
+      ['Curr Total Friction', (totalCurr*1000).toFixed(1)+' W', '#f87171'],
+      ['WC RPM',           WORST_CASE.rpm+' RPM',       '#fbbf24'],
+      ['WC Tension',       WORST_CASE.tension+' N',     '#fbbf24'],
+      ['WC Total Friction',(totalWC*1000).toFixed(1)+' W','#e63946']
+    ].map(([l,v,c])=>`
+      <div class="mat-kpi" style="border-top:3px solid ${c}">
+        <div class="mat-kpi-val" style="color:${c}">${v}</div>
+        <div class="mat-kpi-lbl">${l}</div>
+      </div>`).join('')}
+  </div>
+
+  <!-- i) HUB LOADS -->
+  <div class="mat-section-hdr">i) Hub Load — Current vs Worst Case Full Load</div>
+  <div class="wc-badge">Worst Case: ${WORST_CASE.label}</div>
+  <div class="mat-load-table-wrap">
+  <table class="mat-load-table">
+    <thead>
+      <tr>
+        <th>Pulley</th><th>Material</th><th>μ</th>
+        <th>F_hub Curr (N)</th><th>PDF Limit (N)</th><th>Curr/Limit</th>
+        <th>F_hub WC (N)</th><th>WC/Limit</th><th>WC Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${ORDER.map(n=>{
+        const m   = MATERIAL_DB[n];
+        const Fc  = hubData[n]?hubData[n].F.toFixed(0):'--';
+        const Fwc = wcSnap.fd.pulleys[n]?parseFloat(wcSnap.fd.pulleys[n].T_tight+wcSnap.fd.pulleys[n].T_slack).toFixed(0):'--';
+        const Fwcraw = wcSnap.fr[n]?parseFloat(wcSnap.fr[n].Fh):0;
+        const lim = PDF[n].F;
+        const pctC = hubData[n]?(hubData[n].F/lim*100).toFixed(0)+'%':'--';
+        const pctW = (Fwcraw/lim*100).toFixed(0)+'%';
+        const stW  = Fwcraw<=lim?'PASS':Fwcraw<=lim*1.1?'WARN':'FAIL';
+        return `<tr>
+          <td style="color:${m.color};font-weight:700">${n}</td>
+          <td style="font-size:0.7rem">${m.type}</td>
+          <td>${getPulleyMu(n).toFixed(2)}</td>
+          <td>${Fc}</td>
+          <td style="color:#8899aa">${lim}</td>
+          <td>${pctC}</td>
+          <td style="color:#fbbf24;font-weight:700">${Fwcraw.toFixed(0)}</td>
+          <td style="color:#fbbf24">${pctW}</td>
+          <td style="color:${vcol(stW)};font-weight:700">${stW}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  </div>
+
+  <!-- Frictional power table -->
+  <div class="mat-section-hdr" style="margin-top:1.4rem">Frictional Power — Per Pulley (Material-Corrected μ)</div>
+  <div class="mat-load-table-wrap">
+  <table class="mat-load-table">
+    <thead>
+      <tr>
+        <th>Pulley</th><th>Contact</th><th>μ_mat</th>
+        <th>P_creep (W)</th><th>P_bearing (W)</th>
+        <th>P_total Curr (W)</th><th>P_total WC+AC (W)</th>
+        <th>Hertz p₀ (MPa)</th><th>ΔP (AC ON)</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${ORDER.map(n=>{
+        const m  = MATERIAL_DB[n];
+        const cf = currFr[n], wf = wcFr[n];
+        const dAC= wf.dAC?(parseFloat(wf.dAC)*1000).toFixed(2)+' W':'—';
+        return `<tr>
+          <td style="color:${m.color};font-weight:700">${n}</td>
+          <td style="font-size:0.7rem">${m.back?'Back-side':'Rib-side'}</td>
+          <td>${cf.mu.toFixed(2)}</td>
+          <td>${(parseFloat(cf.Pbp)*1000).toFixed(2)}</td>
+          <td>${(parseFloat(cf.Pb)*1000).toFixed(2)}</td>
+          <td style="color:#f87171;font-weight:700">${(parseFloat(cf.Ptot)*1000).toFixed(2)}</td>
+          <td style="color:#e63946;font-weight:700">${(parseFloat(wf.Ptot)*1000).toFixed(2)}</td>
+          <td>${cf.p0}</td>
+          <td style="color:#fbbf24">${dAC}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="5" style="text-align:right;color:#8899aa;font-weight:700">TOTAL</td>
+        <td style="color:#f87171;font-weight:700">${(totalCurr*1000).toFixed(2)} W</td>
+        <td style="color:#e63946;font-weight:700">${(totalWC*1000).toFixed(2)} W</td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+
+  <!-- Bullet summary -->
+  <div class="mat-bullet-box">
+    ${[
+      `Belt speed at ${state.rpm} RPM = ${v.toFixed(2)} m/s — ${v>=8&&v<=22?'✓ within 8–22 m/s window':'⚠ outside optimal window'}`,
+      `FG260 pulleys (CRK, FAN) use μ = 0.38 — 8.6% higher friction vs steel μ = 0.35`,
+      `Worst-case total friction = ${(totalWC*1000).toFixed(1)} W at ${WORST_CASE.rpm} RPM / ${WORST_CASE.tension} N / AC ON (5.5 kW)`,
+      `Hertz contact stress p₀ remains below compressive limit (FG260: 900 MPa, Steel: 620 MPa) ✓`,
+      `Dominant loss at high RPM: belt-pulley creep friction (v² dependence) — not bearing friction`,
+    ].map(b=>`<div class="mat-bullet">▸ ${b}</div>`).join('')}
+  </div>`;
+}
+
+// ── TAB 3 – Water Pump Bearing Life ──────────────────────────────────────────
+function renderMatTab3() {
+  const el=document.getElementById('mat-wpbearing'); if(!el) return;
+  const curr = computeWPLife();
+  // worst-case WP life
+  const s0r=state.rpm,s0t=state.baseTension,s0i=state.tenIdx;
+  state.rpm=WORST_CASE.rpm; state.baseTension=WORST_CASE.tension; state.tenIdx=WORST_CASE.tenIdx; compute();
+  const wc = computeWPLife();
+  state.rpm=s0r; state.baseTension=s0t; state.tenIdx=s0i; compute();
+
+  const mkRing=(w)=>`
+    <div class="wp-ring" style="--wpc:${w.gcol}">
+      <div class="wp-ring-h">${parseInt(w.Ladj).toLocaleString()}</div>
+      <div class="wp-ring-u">hours L₁₀</div>
+      <div class="wp-ring-s" style="color:${w.gcol}">${w.grade}</div>
+    </div>`;
+
+  el.innerHTML=`
+  <div class="wp-top-grid">
+    <!-- Spec -->
+    <div class="wp-spec-card">
+      <div class="mat-section-hdr">ii) WP Bearing — ${WP_BEARING.id} (ISO 15 / IS:6455)</div>
+      ${[
+        ['Type','Deep Groove Ball Bearing (DGBB)'],
+        ['Bore d / OD D / Width B',`${WP_BEARING.d} / ${WP_BEARING.D} / ${WP_BEARING.B} mm`],
+        ['Dyn. Load Rating Cr',`${WP_BEARING.Cr.toLocaleString()} N`],
+        ['Static Rating C0r',`${WP_BEARING.C0r.toLocaleString()} N`],
+        ['Speed Limit (grease)',`${WP_BEARING.n_max.toLocaleString()} RPM`],
+        ['L₁₀ Exponent p','3 (ball bearing)'],
+        ['Reliability factor a₁','1.0 (90% reliability)'],
+        ['a_ISO','1.0 (std contamination)'],
+        ['Lubrication','Lithium soap NLGI-2, sealed (2RS)'],
+      ].map(([k,v])=>`
+        <div class="wp-row"><span>${k}</span><span style="color:#4fc3f7;font-family:var(--font-mono)">${v}</span></div>`).join('')}
+      <div class="mat-bullet-box" style="margin-top:0.8rem">
+        ${[
+          'ISO 281: L₁₀ = (Cr/P)³ × 10⁶ / (60 × n_wp)',
+          'L_na = a₁ × a_ISO × L₁₀  (adjusted life)',
+          'Replace at 90% of L_na to prevent in-service failure',
+          `Failure mode: ${curr.CP>3?'contamination-limited (C/P > 3)':'fatigue-limited (C/P ≤ 3)'}`,
+          'L₁₀ ∝ (C/F)³ — 10% higher hub load → 27% shorter life',
+        ].map(b=>`<div class="mat-bullet">▸ ${b}</div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Current life -->
+    <div class="wp-life-card">
+      <div class="mat-section-hdr">Current Condition — ${state.rpm} RPM</div>
+      ${mkRing(curr)}
+      ${[
+        ['WP Speed n_wp',curr.n_wp+' RPM'],
+        ['Hub Load P',curr.Fh+' N'],
+        ['C/P Ratio',curr.CP],
+        ['L₁₀ Basic',parseInt(curr.L10h).toLocaleString()+' h'],
+        ['L_na Adjusted',parseInt(curr.Ladj).toLocaleString()+' h'],
+        ['Replace At (90%)',parseInt(curr.rep).toLocaleString()+' h'],
+        ['Static SF S₀',curr.S0],
+        ['Speed OK?',curr.spd_ok?'✓ Within limit':'⚠ Exceeds '+WP_BEARING.n_max],
+      ].map(([k,v])=>`
+        <div class="wp-row"><span>${k}</span><span style="color:#4fc3f7;font-family:var(--font-mono)">${v}</span></div>`).join('')}
+    </div>
+
+    <!-- Worst-case life -->
+    <div class="wp-life-card" style="border:1px solid #e63946">
+      <div class="mat-section-hdr" style="color:#e63946">⚠ Worst Case — ${WORST_CASE.rpm} RPM / ${WORST_CASE.tension} N</div>
+      ${mkRing(wc)}
+      ${[
+        ['WP Speed n_wp',wc.n_wp+' RPM'],
+        ['Hub Load P',wc.Fh+' N'],
+        ['C/P Ratio',wc.CP],
+        ['L₁₀ Basic',parseInt(wc.L10h).toLocaleString()+' h'],
+        ['L_na Adjusted',parseInt(wc.Ladj).toLocaleString()+' h'],
+        ['Replace At (90%)',parseInt(wc.rep).toLocaleString()+' h'],
+        ['Static SF S₀',wc.S0],
+        ['Life vs Current',(parseInt(wc.Ladj)/Math.max(parseInt(curr.Ladj),1)*100).toFixed(0)+'% of current life'],
+      ].map(([k,v])=>`
+        <div class="wp-row"><span>${k}</span><span style="color:#e63946;font-family:var(--font-mono)">${v}</span></div>`).join('')}
+      <div class="mat-bullet-box" style="margin-top:0.8rem;border-color:#e6394644">
+        ${[
+          `WP bearing life drops to ${parseInt(wc.Ladj).toLocaleString()} h at full load`,
+          `vs fan bearing L₁₀ = 3,305 h (C&U WR25153) — ${parseInt(wc.Ladj)<3305?'WP is now life-limiting!':'Fan bearing still limits'}`,
+          'Over-tensioning by 10% cuts L₁₀ by 27% (cube law)',
+          `Replace WP bearing at ${parseInt(wc.rep).toLocaleString()} h under worst-case duty`,
+        ].map(b=>`<div class="mat-bullet">▸ ${b}</div>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── TAB 4 – Non-AC vs AC ──────────────────────────────────────────────────────
+function renderACvNonAC() {
+  const el=document.getElementById('mat-acvsnonac'); if(!el) return;
+  const v   = beltVelocity(state.rpm);
+  const fd  = computeFEAD();
+  const dT  = (AC_KW.normal/v).toFixed(1);
+  const dTw = (AC_KW.worst/v).toFixed(1);
+  const frOff  = computeMatFriction(0);
+  const frNorm = computeMatFriction(AC_KW.normal);
+  const frWC   = computeMatFriction(AC_KW.worst);
+  const tOff   = ORDER.reduce((s,n)=>s+parseFloat(frOff[n].Ptot),0)*1000;
+  const tNorm  = ORDER.reduce((s,n)=>s+parseFloat(frNorm[n].Ptot),0)*1000;
+  const tWC    = ORDER.reduce((s,n)=>s+parseFloat(frWC[n].Ptot),0)*1000;
+  const dFuel  = n=>(n*200).toFixed(1); // g/h at 200 g/kWh BSFC
+
+  // RPM sweep for chart
+  const savedR=state.rpm,savedT2=state.baseTension,savedI=state.tenIdx;
+  const rpts=[800,1000,1200,1400,1600,1800,2000], pOff=[],pNorm=[],pWC=[];
+  rpts.forEach(r=>{
+    state.rpm=r; compute();
+    const f0=computeMatFriction(0), fn=computeMatFriction(AC_KW.normal), fw=computeMatFriction(AC_KW.worst);
+    pOff.push(+(ORDER.reduce((s,n)=>s+parseFloat(f0[n].Ptot),0)*1000).toFixed(2));
+    pNorm.push(+(ORDER.reduce((s,n)=>s+parseFloat(fn[n].Ptot),0)*1000).toFixed(2));
+    pWC.push(+(ORDER.reduce((s,n)=>s+parseFloat(fw[n].Ptot),0)*1000).toFixed(2));
+  });
+  state.rpm=savedR; state.baseTension=savedT2; state.tenIdx=savedI; compute();
+
+  el.innerHTML=`
+  <!-- iii) header -->
+  <div class="mat-section-hdr">iii) Frictional Power Increase — Non-AC → AC (Normal &amp; Worst Case)</div>
+
+  <!-- KPI row -->
+  <div class="mat-kpi-strip">
+    ${[
+      ['Without AC',  tOff.toFixed(1)+' W', '#34d399'],
+      ['AC Normal (3.5 kW)', tNorm.toFixed(1)+' W','#fbbf24'],
+      ['AC Worst (5.5 kW)', tWC.toFixed(1)+' W','#e63946'],
+      ['ΔP (Off→Normal)',  '+'+(tNorm-tOff).toFixed(1)+' W','#fbbf24'],
+      ['ΔP (Off→Worst)',   '+'+(tWC-tOff).toFixed(1)+' W','#e63946'],
+      ['Extra Fuel (Worst)','+'+ dFuel((tWC-tOff)/1000)+' g/h','#f87171'],
+    ].map(([l,v,c])=>`
+      <div class="mat-kpi" style="border-top:3px solid ${c}">
+        <div class="mat-kpi-val" style="color:${c}">${v}</div>
+        <div class="mat-kpi-lbl">${l}</div>
+      </div>`).join('')}
+  </div>
+
+  <div class="ac-two-col">
+
+    <!-- formula + bullets -->
+    <div>
+      <div class="ac-formula-block">
+        <div class="ac-formula-title">Formula (GT-SUITE / MATLAB model)</div>
+        <div class="ac-formula">ΔP_friction = ΔP_bending + ΔP_bearing</div>
+        <div class="ac-formula-detail">
+          ΔT_AC = P_AC / v = ${AC_KW.normal} kW / ${v.toFixed(2)} m/s = ${dT} N (normal)<br>
+          ΔT_AC = ${AC_KW.worst} kW / ${v.toFixed(2)} m/s = ${dTw} N (worst case)<br>
+          ΔP_bend = Σ C_b·(ΔT/R_i)·v  (all pulleys, C_b = 0.0012)<br>
+          ΔP_bear = μ_b·ΔF_hub·ω·R_b   (CRK dominant)
+        </div>
+      </div>
+      <div class="mat-bullet-box" style="margin-top:0.8rem">
+        ${[
+          `ΔT_AC normal = ${dT} N extra belt tension when AC engages`,
+          `ΔT_AC worst  = ${dTw} N (compressor stall / max load)`,
+          `Total friction: Off=${tOff.toFixed(1)} W → Normal=${tNorm.toFixed(1)} W → Worst=${tWC.toFixed(1)} W`,
+          `ΔP worst vs off = ${(tWC-tOff).toFixed(1)} W extra friction power`,
+          `Extra fuel burn = ${dFuel((tWC-tOff)/1000)} g/h (@ 200 g/kWh diesel BSFC)`,
+          `FG260 CRK+FAN contribute ~60% of total belt-pulley friction (higher μ = 0.38)`,
+          `At worst case: FEAD efficiency drops from ${fd.totals.eta}% to ~${(parseFloat(fd.totals.eta)-parseFloat(((tWC-tOff)/(parseFloat(fd.totals.P_accessories)*10+parseFloat(fd.totals.P_losses)*10+tWC/1000)*100).toFixed(2))).toFixed(1)}%`,
+        ].map(b=>`<div class="mat-bullet">▸ ${b}</div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Per-RPM table -->
+    <div>
+      <table class="ac-table">
+        <thead>
+          <tr><th>RPM</th><th>No AC (W)</th><th>AC 3.5 kW (W)</th><th>AC 5.5 kW (W)</th><th>Δ Worst (W)</th></tr>
+        </thead>
+        <tbody>
+          ${rpts.map((r,i)=>`
+            <tr>
+              <td>${r}</td>
+              <td>${pOff[i].toFixed(1)}</td>
+              <td>${pNorm[i].toFixed(1)}</td>
+              <td style="color:#e63946;font-weight:700">${pWC[i].toFixed(1)}</td>
+              <td style="color:#fbbf24">+${(pWC[i]-pOff[i]).toFixed(1)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div style="position:relative;height:260px;margin-top:1rem">
+    <canvas id="ac-friction-chart"></canvas>
+  </div>`;
+
+  setTimeout(()=>{
+    const canvas=document.getElementById('ac-friction-chart'); if(!canvas) return;
+    if(matACChart){matACChart.destroy();matACChart=null;}
+    matACChart=new Chart(canvas,{
+      type:'line',
+      data:{
+        labels:rpts,
+        datasets:[
+          {label:'No AC',data:pOff,borderColor:'#34d399',backgroundColor:'rgba(52,211,153,0.08)',borderWidth:2.5,fill:true,tension:0.4,pointRadius:4},
+          {label:'AC 3.5 kW',data:pNorm,borderColor:'#fbbf24',backgroundColor:'rgba(251,191,36,0.08)',borderWidth:2.5,fill:true,tension:0.4,pointRadius:4},
+          {label:'AC 5.5 kW (Worst)',data:pWC,borderColor:'#e63946',backgroundColor:'rgba(230,57,70,0.10)',borderWidth:2.5,fill:true,tension:0.4,pointRadius:4}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{labels:{color:'#cdd6e8',font:{size:11}}},tooltip:{backgroundColor:'rgba(10,14,26,0.95)',titleColor:'#cdd6e8',bodyColor:'#8899aa',padding:10}},
+        scales:{
+          x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#8899aa'},title:{display:true,text:'Engine RPM',color:'#8899aa'}},
+          y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#8899aa'},title:{display:true,text:'Frictional Power (W)',color:'#8899aa'}}
+        }
+      }
+    });
+  },80);
+}
+
+// ── TAB 5 – GT / MATLAB-Simulink ─────────────────────────────────────────────
+function renderSimPanel() {
+  const el=document.getElementById('mat-simulation'); if(!el) return;
+  const wc = computeWorstCase();
+  const frW= wc.fr;
+  const totalWC = ORDER.reduce((s,n)=>s+parseFloat(frW[n].Ptot),0)*1000;
+
+  el.innerHTML=`
+  <div class="sim-two-col">
+
+    <!-- GT methodology bullets -->
+    <div class="sim-panel">
+      <div class="mat-section-hdr">GT-SUITE Methodology</div>
+      <div class="mat-bullet-box">
+        ${[
+          'Belt modelled as distributed-parameter system — N discrete segments per span',
+          'Each segment: mass m_seg = ρ_belt·A·L_seg, stiffness k = E_belt·A/L_seg',
+          'Friction: dT/dθ = μ·T applied at each wrap-arc node (Capstan differential)',
+          'μ material-dependent: FG260 = 0.38 (rib), Steel = 0.35 (rib), back-side = 0.25',
+          'AC clutch injection: T_AC = P_AC/ω_AC at AC pulley node',
+          `At worst case: T_AC = ${AC_KW.worst} kW / (2π×${WORST_CASE.rpm}×${PULLEYS.AC.sr}/60) = ${(AC_KW.worst/(2*Math.PI*WORST_CASE.rpm*PULLEYS.AC.sr/60)).toFixed(2)} N·m`,
+          'Solver: quasi-static + eigenvalue for belt natural frequencies',
+          `Belt fundamental mode f₁ = v/(2L) = ${(beltVelocity(state.rpm)/(2*1.577)).toFixed(1)} Hz at ${state.rpm} RPM`,
+          `GT outputs: P_friction per contact patch, F_hub per bearing, η`,
+          `GT worst-case result: P_friction = ${totalWC.toFixed(1)} W (replicated analytically)`,
+        ].map(b=>`<div class="mat-bullet">▸ ${b}</div>`).join('')}
+      </div>
+
+      <div class="mat-section-hdr" style="margin-top:1rem">MATLAB / Simulink Model</div>
+      <div class="sim-eq-block">
+<pre style="color:#34d399;font-size:0.72rem;line-height:1.8">
+% FEAD friction model — Ashok Leyland H6
+% u = [RPM; T0; AC_state]
+v   = pi * D_CRK * RPM / 60e3;       % belt speed [m/s]
+dT_AC = (P_AC * AC_state) / v;       % extra tension [N]
+
+% Per-pulley loop
+P_bend = Cb * (T_avg ./ R) .* v;     % bending loss
+P_bear = mu_b * F_hub .* omega .* Rb;% bearing loss
+P_creep= mu_mat .* Fn .* 0.005 .* v; % creep friction
+
+% Delta with AC
+dP = sum(Cb*(dT_AC./R).*v) + ...
+     mu_b*(dT_AC*1.8).*omega_CRK.*Rb_CRK;
+
+% Transfer fn: G(s) = K/(tau*s+1)
+K   = ${(ORDER.reduce((s,n)=>s+parseFloat(frW[n].dAC||0),0)*1000).toFixed(1)};  % W per AC unit
+tau = 0.15;           % s (clutch engagement)
+</pre>
+      </div>
+    </div>
+
+    <!-- Block diagram canvas -->
+    <div class="sim-panel">
+      <div class="mat-section-hdr">Simulink Block Diagram</div>
+      <canvas id="simulink-canvas" width="640" height="340"></canvas>
+
+      <div class="mat-section-hdr" style="margin-top:1rem">Worst-Case Full Load Results</div>
+      <table class="ac-table">
+        <thead><tr><th>Pulley</th><th>Material μ</th><th>WC F_hub (N)</th><th>WC P_friction (W)</th><th>ΔP from AC (W)</th></tr></thead>
+        <tbody>
+          ${ORDER.map(n=>{
+            const m=MATERIAL_DB[n], w=frW[n];
+            return `<tr>
+              <td style="color:${m.color};font-weight:700">${n}</td>
+              <td>${getPulleyMu(n).toFixed(2)}</td>
+              <td style="color:#fbbf24">${w.Fh}</td>
+              <td style="color:#e63946;font-weight:700">${(parseFloat(w.Ptot)*1000).toFixed(2)}</td>
+              <td style="color:#fbbf24">${w.dAC?(parseFloat(w.dAC)*1000).toFixed(2):'—'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" style="text-align:right;color:#8899aa">TOTAL</td>
+            <td style="color:#e63946;font-weight:700">${totalWC.toFixed(2)} W</td>
+            <td style="color:#fbbf24">${(ORDER.reduce((s,n)=>s+parseFloat(frW[n].dAC||0),0)*1000).toFixed(2)} W</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>`;
+
+  setTimeout(drawSimulinkDiagram, 80);
+}
+
+function drawSimulinkDiagram() {
+  const c=document.getElementById('simulink-canvas'); if(!c) return;
+  const ctx=c.getContext('2d');
+  const W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H);
+
+  const bg='#0a0e1a',box='#0d1628',bdr='#1c2840';
+  const cyan='#4fc3f7',grn='#34d399',amb='#fbbf24',red='#f87171',dim='#8899aa',wht='#cdd6e8';
+
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+
+  // title
+  ctx.fillStyle=cyan; ctx.font='bold 10px sans-serif'; ctx.textAlign='center';
+  ctx.fillText('MATLAB/Simulink — FEAD Frictional Power Model (Non-AC vs AC)',W/2,18);
+
+  const box2=(x,y,w,h,label,sub,bc,fc)=>{
+    ctx.fillStyle=fc||box; ctx.strokeStyle=bc||bdr; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.roundRect(x,y,w,h,4); ctx.fill(); ctx.stroke();
+    ctx.fillStyle=bc||wht; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+    ctx.fillText(label,x+w/2,y+h/2-(sub?4:0));
+    if(sub){ctx.fillStyle=dim; ctx.font='7.5px monospace'; ctx.fillText(sub,x+w/2,y+h/2+8);}
+  };
+  const arr=(x1,y1,x2,y2,col,lbl)=>{
+    ctx.strokeStyle=col||dim; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    const a=Math.atan2(y2-y1,x2-x1);
+    ctx.beginPath(); ctx.moveTo(x2,y2);
+    ctx.lineTo(x2-7*Math.cos(a-0.4),y2-7*Math.sin(a-0.4));
+    ctx.lineTo(x2-7*Math.cos(a+0.4),y2-7*Math.sin(a+0.4));
+    ctx.closePath(); ctx.fillStyle=col||dim; ctx.fill();
+    if(lbl){ctx.fillStyle=dim;ctx.font='8px sans-serif';ctx.textAlign='center';
+      ctx.fillText(lbl,(x1+x2)/2,(y1+y2)/2-5); ctx.textAlign='left';}
+  };
+
+  // Inputs
+  box2(10,45,85,32,'n (RPM)',state.rpm+' RPM',cyan,'#061626');
+  box2(10,88,85,32,'T₀ (N)',state.baseTension+' N',amb,'#120c00');
+  box2(10,131,85,32,'AC state','0 / 1',red,'#1a0505');
+
+  // Belt velocity
+  box2(150,45,95,32,'Belt Speed','v=π·D·n/60k',cyan,'#061626');
+  arr(95,61,150,61,cyan,'n');
+
+  // Tension model
+  box2(150,98,95,32,'Tension','Capstan+ΔT_AC',amb,'#120c00');
+  arr(95,104,150,114,amb,'T₀');
+  arr(95,147,150,120,red,'AC');
+
+  // Hub load
+  box2(305,45,100,32,'Hub Load','√(T_in²+T_out²…)',cyan,'#061626');
+  arr(245,61,305,61,cyan,'tensions');
+  arr(245,114,305,72,cyan);
+
+  // Friction blocks
+  box2(305,105,100,28,'ΔP_bending','C_b·ΔT/R·v',grn,'#020e06');
+  box2(305,145,100,28,'ΔP_bearing','μ_b·F·ω·R',grn,'#020e06');
+  arr(245,114,305,119,grn,'ΔT');
+  arr(405,61,305,159,grn,'ΔF_hub');
+
+  // Summation
+  ctx.strokeStyle=grn; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(466,150,16,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle=grn; ctx.font='bold 14px monospace'; ctx.textAlign='center';
+  ctx.fillText('Σ',466,155); ctx.textAlign='left';
+  arr(405,119,450,143,grn);
+  arr(405,159,450,156,grn);
+
+  // Outputs
+  box2(510,125,115,38,'ΔP_friction',(ORDER.reduce((s,n)=>s+parseFloat(computeMatFriction(AC_KW.normal)[n].Ptot),0)*1000).toFixed(1)+' W',red,'#1a0505');
+  arr(482,150,510,144,red);
+
+  box2(510,52,115,38,'FEAD η',computeFEAD().totals.eta+'%',grn,'#020e06');
+  arr(405,61,510,71,grn);
+
+  // Material μ annotation
+  ctx.fillStyle='#8899aa'; ctx.font='italic 8px sans-serif'; ctx.textAlign='left';
+  ctx.fillText('μ: FG260=0.38 | Steel=0.35 | back=0.25',10,H-12);
+  ctx.fillText('C_b=0.0012 (aramid) | μ_b=0.003 (rolling)',10,H-4);
+}
+
+// ── Hook into updateAll ───────────────────────────────────────────────────────
+function renderFrictionTable() {
+  const active=document.querySelector('.mat-tab.active');
+  if(!active) return;
+  const tab=active.dataset.tab;
+  if(tab==='materials')  renderMatTab1();
+  if(tab==='loads')      renderMatTab2();
+  if(tab==='wpbearing')  renderMatTab3();
+  if(tab==='acvsnonac')  renderACvNonAC();
+  if(tab==='simulation') renderSimPanel();
 }

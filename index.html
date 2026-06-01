@@ -412,6 +412,38 @@
 
 
   <!-- ═══ IDEAL WORKING CONDITION & COMPLIANCE DASHBOARD ═══ -->
+
+  <!-- MATERIAL PROPERTIES & FRICTIONAL ANALYSIS -->
+  <div class="row row-materials">
+    <section class="card card-materials" aria-label="Material Properties Dashboard">
+      <div class="card-header">
+        <div class="card-title-group">
+          <span class="card-icon">&#9879;</span>
+          <h2 class="card-title">Material Properties &amp; Frictional Power Analysis</h2>
+        </div>
+        <span class="card-sub">FG260 IS:210:1993 (CRK, WP) &#183; Carbon Steel IS:1570 (ALT, AC, IDR, TEN) &#183; Hub Loads &#183; WP Bearing Life &#183; Non-AC vs AC &#183; GT / MATLAB Model</span>
+      </div>
+
+      <!-- Tab strip -->
+      <div class="mat-tabs">
+        <button class="mat-tab active" data-tab="materials">&#9881; Material Properties</button>
+        <button class="mat-tab" data-tab="loads">&#128200; Load Analysis</button>
+        <button class="mat-tab" data-tab="wpbearing">&#128295; WP Bearing Life</button>
+        <button class="mat-tab" data-tab="acvsnonac">&#9889; Non-AC vs AC</button>
+        <button class="mat-tab" data-tab="simulation">&#128290; GT / MATLAB Model</button>
+      </div>
+
+      <!-- Worst-case button -->
+      <div class="wc-bar"><button id="btn-worst-case" class="btn-wc">&#9888; Apply Worst Case Full Load</button><span class="wc-desc">Sets 2000 RPM / 3500 N / MIN arm / AC 5.5 kW — maximum hub loads &amp; friction</span></div>
+      <!-- Panels -->
+      <div id="mat-tab-materials" class="mat-panel active"><div id="mat-cards"></div></div>
+      <div id="mat-tab-loads"     class="mat-panel"><div id="mat-loads"></div></div>
+      <div id="mat-tab-wpbearing" class="mat-panel"><div id="mat-wpbearing"></div></div>
+      <div id="mat-tab-acvsnonac" class="mat-panel"><div id="mat-acvsnonac"></div></div>
+      <div id="mat-tab-simulation" class="mat-panel"><div id="mat-simulation"></div></div>
+
+    </section>
+  </div>
   <div class="row row-compliance">
     <section class="card card-compliance" aria-label="Ideal Working Condition Dashboard">
 
