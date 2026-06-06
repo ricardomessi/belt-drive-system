@@ -827,8 +827,37 @@ function updateChart() {
     });
   }
 
+  // ── Worst-case & Ideal markers ──────────────────────────────
+  const _wcH = ovGetWorst();
+  const _idH = ovGetIdeal();
+  if (_wcH && _idH) {
+    // Vertical marker lines across full y-range
+    const _yMax = 4500;
+    datasets.push(
+      { label:'✦ Ideal '+_idH.rpm+' RPM', data:[{x:_idH.rpm,y:0},{x:_idH.rpm,y:_yMax}],
+        borderColor:'#34d399bb', borderWidth:1.5, borderDash:[6,3],
+        pointRadius:0, tension:0, fill:false },
+      { label:'⚠ Worst '+_wcH.rpm+' RPM', data:[{x:_wcH.rpm,y:0},{x:_wcH.rpm,y:_yMax}],
+        borderColor:'#e63946bb', borderWidth:1.5, borderDash:[4,2],
+        pointRadius:0, tension:0, fill:false }
+    );
+    // Per-pulley scatter dots at ideal and worst RPM
+    for (const n of ORDER) {
+      if (!chartVisible[n]) continue;
+      datasets.push(
+        { label:'Ideal '+n, type:'scatter',
+          data:[{x:_idH.rpm, y:_idH.hub[n]||0}],
+          borderColor:'#34d399', backgroundColor:'#34d399',
+          pointRadius:9, pointStyle:'triangle', showLine:false },
+        { label:'WC '+n, type:'scatter',
+          data:[{x:_wcH.rpm, y:_wcH.hub[n]||0}],
+          borderColor:'#e63946', backgroundColor:'#e63946',
+          pointRadius:9, pointStyle:'rectRot', showLine:false }
+      );
+    }
+  }
   hubChart.data.datasets = datasets;
-  hubChart.update();
+  hubChart.update('none');
 }
 
 // ── Three.js 3D Belt Texture ──────────────────────────────────────────────────
@@ -1329,6 +1358,7 @@ function updateAll() {
   renderDriveCycleChart();
   renderComplianceDashboard();
   renderFrictionTable();
+  setTimeout(ovInjectLegend, 350);
 }
 
 function resizeCanvases() {
@@ -1746,6 +1776,25 @@ function renderDriveCycleChart() {
   renderCycleStats();
   renderCyclePhaseLegend();
   renderCycleWorstGrid();
+
+  // ── Worst-case & Ideal hub-load reference lines ───────────────
+  const _wc2 = ovGetWorst(), _id2 = ovGetIdeal();
+  if (_wc2 && _id2 && driveCycleChart) {
+    const pts = driveCycleChart.data.labels.length;
+    const hLine = (val, col, lbl, dash) => ({
+      label:lbl, data:Array(pts).fill(+val.toFixed(0)),
+      borderColor:col, backgroundColor:'transparent',
+      borderWidth:1.5, borderDash:dash, pointRadius:0,
+      fill:false, tension:0, type:'line', yAxisID:'yHub'
+    });
+    driveCycleChart.data.datasets.push(
+      hLine(_id2.hub.CRK, '#34d399cc', '✦ Ideal CRK '+_id2.hub.CRK.toFixed(0)+' N', [6,3]),
+      hLine(_id2.hub.FAN, '#34d39966', '✦ Ideal FAN '+_id2.hub.FAN.toFixed(0)+' N', [6,3]),
+      hLine(_wc2.hub.CRK, '#e63946cc', '⚠ WC CRK '+_wc2.hub.CRK.toFixed(0)+' N',   [4,2]),
+      hLine(_wc2.hub.FAN, '#e6394666', '⚠ WC FAN '+_wc2.hub.FAN.toFixed(0)+' N',   [4,2])
+    );
+    driveCycleChart.update('none');
+  }
 }
 
 function renderCycleStats() {
@@ -2188,7 +2237,33 @@ function renderFEADLineChart() {
           label: 'Target Efficiency 96%',
           data: rpms.map(()=>96), borderColor:'rgba(52,211,153,0.3)',
           borderWidth:1, borderDash:[4,4], pointRadius:0, fill:false, yAxisID:'yEta'
-        }
+        },
+        // ── Worst-case & Ideal vertical markers ──────────────────────
+        ...(()=>{
+          const _wc = ovGetWorst(), _id = ovGetIdeal();
+          if (!_wc || !_id) return [];
+          const mkVLine = (targetRPM, col) => ({
+            data: rpms.map(r => r===targetRPM ? 100 : null),
+            borderColor: col+'bb', backgroundColor:'transparent',
+            borderWidth:1.5, borderDash:[5,3], pointRadius:0,
+            spanGaps:false, fill:false, yAxisID:'yEta', label:'_vline'
+          });
+          const mkDot = (targetRPM, val, col, shape, lbl, yID) => ({
+            label: lbl, data: rpms.map(r => r===targetRPM ? val : null),
+            borderColor:col, backgroundColor:col,
+            borderWidth:0, pointRadius:10, pointStyle:shape,
+            pointHoverRadius:12, showLine:false, fill:false,
+            spanGaps:false, yAxisID:yID
+          });
+          return [
+            mkVLine(_id.rpm, '#34d399'),
+            mkVLine(_wc.rpm, '#e63946'),
+            mkDot(_id.rpm, _id.eta, '#34d399', 'triangle',  '✦ Ideal η '+_id.eta.toFixed(1)+'%',  'yEta'),
+            mkDot(_wc.rpm, _wc.eta, '#e63946', 'rectRot',   '⚠ Worst η '+_wc.eta.toFixed(1)+'%',  'yEta'),
+            mkDot(_id.rpm, _id.sf,  '#34d399', 'triangle',  '✦ Ideal SF '+_id.sf.toFixed(2),        'ySF'),
+            mkDot(_wc.rpm, _wc.sf,  '#e63946', 'rectRot',   '⚠ Worst SF '+_wc.sf.toFixed(2),        'ySF')
+          ];
+        })()
       ]
     },
     options: {
@@ -2508,12 +2583,22 @@ function renderComplianceRadar(c) {
       labels,
       datasets: [
         {
-          label:'Ideal', data:idealData,
+          label:'Ideal (100)', data:idealData,
           borderColor:'rgba(79,195,247,0.5)', backgroundColor:'rgba(79,195,247,0.05)',
           borderWidth:1.5, borderDash:[5,3], pointRadius:3, pointBackgroundColor:'#4fc3f7'
         },
+        // ── Worst-case radar ──────────────────────────────────────────
+        ...(()=>{
+          const _wc = ovGetWorst();
+          if (!_wc) return [];
+          const ws = _wc.comp.scores;
+          const wData = [ws.efficiency,ws.slipSF,ws.hubLoads,ws.beltSpeed,ws.tension].map(v=>+parseFloat(v).toFixed(0));
+          return [{ label:'⚠ Worst Case', data:wData,
+            borderColor:'#e63946', backgroundColor:'rgba(230,57,70,0.12)',
+            borderWidth:2, borderDash:[5,3], pointRadius:4, pointBackgroundColor:'#e63946' }];
+        })(),
         {
-          label:'Current', data:currentData,
+          label:'◉ Current', data:currentData,
           borderColor: c.color, backgroundColor: c.color + '22',
           borderWidth:2.5, pointRadius:4, pointBackgroundColor: c.color
         }
@@ -2522,7 +2607,7 @@ function renderComplianceRadar(c) {
     options: {
       responsive:true, maintainAspectRatio:false,
       plugins:{
-        legend:{ display:false },
+        legend:{ display:true, labels:{ color:'#8899aa', font:{size:10}, boxWidth:12 } },
         tooltip:{
           backgroundColor:'rgba(10,14,26,0.95)', borderColor:'#1c2840', borderWidth:1,
           titleColor:'#cdd6e8', bodyColor:'#8899aa', padding:10
@@ -4280,264 +4365,72 @@ function renderFrictionTable() {
 
 
 // ══════════════════════════════════════════════════════════════════════════════
-// WORST-CASE & IDEAL OVERLAYS  —  added to all existing charts
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OVERLAY HELPERS  —  Worst-Case & Ideal snapshots for all charts
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── Ideal operating point ─────────────────────────────────────────────────────
-const IDEAL_POINT = { rpm: 1200, tenIdx: 3 }; // MEAN arm, T_opt computed live
-
-// ── Pre-compute both snapshots (state-safe) ────────────────────────────────────
-function snapshotMetrics(rpm, tension, tenIdx) {
-  const s0r = state.rpm, s0t = state.baseTension, s0i = state.tenIdx;
-  state.rpm = rpm; state.baseTension = tension; state.tenIdx = tenIdx; compute();
+function ovSnap(rpm, tension, tenIdx) {
+  const s0r=state.rpm, s0t=state.baseTension, s0i=state.tenIdx;
+  state.rpm=rpm; state.baseTension=tension; state.tenIdx=tenIdx; compute();
   const fd   = computeFEAD();
   const comp = computeCompliance();
-  const v    = beltVelocity(rpm);
-  const minSF = Math.min(...ORDER.map(n => parseFloat(fd.pulleys[n].SF)));
   const hub  = {};
   ORDER.forEach(n => { hub[n] = hubData[n] ? hubData[n].F : 0; });
-  state.rpm = s0r; state.baseTension = s0t; state.tenIdx = s0i; compute();
-  return { rpm, tension, tenIdx, fd, comp, v, minSF, hub };
+  const sf   = Math.min(...ORDER.map(n => parseFloat(fd.pulleys[n].SF)));
+  const eta  = parseFloat(fd.totals.eta);
+  state.rpm=s0r; state.baseTension=s0t; state.tenIdx=s0i; compute();
+  return { rpm, tension, hub, sf, eta, fd, comp };
 }
 
-function getIdealMetrics() {
-  // Ideal tension = T_opt computed at ideal RPM
-  const s0r = state.rpm, s0t = state.baseTension, s0i = state.tenIdx;
-  state.rpm = IDEAL_POINT.rpm; state.tenIdx = IDEAL_POINT.tenIdx; compute();
-  const T_opt = parseInt(computeFEAD().totals.T_opt);
-  state.rpm = s0r; state.baseTension = s0t; state.tenIdx = s0i; compute();
-  return snapshotMetrics(IDEAL_POINT.rpm, T_opt, IDEAL_POINT.tenIdx);
+function ovGetWorst() {
+  try { return ovSnap(WORST_CASE.rpm, WORST_CASE.tension, WORST_CASE.tenIdx); }
+  catch(e) { return null; }
 }
 
-function getWorstMetrics() {
-  return snapshotMetrics(WORST_CASE.rpm, WORST_CASE.tension, WORST_CASE.tenIdx);
+function ovGetIdeal() {
+  try {
+    // Compute T_opt at ideal RPM first
+    const s0r=state.rpm, s0t=state.baseTension, s0i=state.tenIdx;
+    state.rpm=1200; state.tenIdx=3; compute();
+    const T_opt = parseInt(computeFEAD().totals.T_opt) || 1400;
+    state.rpm=s0r; state.baseTension=s0t; state.tenIdx=s0i; compute();
+    return ovSnap(1200, T_opt, 3);
+  } catch(e) { return null; }
 }
 
-// ── Colour tokens ─────────────────────────────────────────────────────────────
-const OV = {
-  ideal: { line: '#34d399', fill: 'rgba(52,211,153,0.10)', pt: '#34d399',  label: '✦ Ideal' },
-  worst: { line: '#e63946', fill: 'rgba(230,57,70,0.10)',  pt: '#e63946',  label: '⚠ Worst Case' },
-  curr:  { line: '#4fc3f7', fill: 'rgba(79,195,247,0.07)', pt: '#4fc3f7',  label: '◉ Current' }
-};
+function ovInjectLegend() {
+  try {
+    const ideal = ovGetIdeal(), worst = ovGetWorst();
+    if (!ideal || !worst) return;
+    const curr_fd  = computeFEAD();
+    const curr_eta = parseFloat(curr_fd.totals.eta).toFixed(1);
+    const curr_sf  = Math.min(...ORDER.map(n=>parseFloat(curr_fd.pulleys[n].SF))).toFixed(2);
 
-// ── 1. Hub-Load vs RPM — patch updateChart ────────────────────────────────────
-const _origUpdateChart = updateChart;
-function updateChart() {
-  _origUpdateChart();
-  if (!hubChart) return;
+    const badge = (sym, label, rpm, tension, eta, sf, color) => `
+      <div class="ov-badge" style="border-color:${color}44;background:${color}0e">
+        <span class="ov-dot" style="background:${color}"></span>
+        <span class="ov-name" style="color:${color}">${sym} ${label}</span>
+        <span class="ov-pill">${rpm} RPM</span>
+        <span class="ov-pill">${tension} N</span>
+        <span class="ov-pill">&eta; ${eta}%</span>
+        <span class="ov-pill">SF ${sf}</span>
+      </div>`;
 
-  const ideal = getIdealMetrics();
-  const worst = getWorstMetrics();
-
-  // Build one scatter point per overlay per visible pulley
-  const idealSets = [], worstSets = [];
-  for (const n of ORDER) {
-    if (!chartVisible[n]) continue;
-    idealSets.push({
-      label: 'Ideal ' + n, type: 'scatter',
-      data: [{ x: ideal.rpm, y: ideal.hub[n] }],
-      borderColor: OV.ideal.line, backgroundColor: OV.ideal.line,
-      pointRadius: 8, pointStyle: 'triangle', pointHoverRadius: 10,
-      showLine: false
-    });
-    worstSets.push({
-      label: 'WC ' + n, type: 'scatter',
-      data: [{ x: worst.rpm, y: worst.hub[n] }],
-      borderColor: OV.worst.line, backgroundColor: OV.worst.line,
-      pointRadius: 8, pointStyle: 'rectRot', pointHoverRadius: 10,
-      showLine: false
-    });
-  }
-
-  // Vertical marker lines (full height)
-  const yMax = 4000;
-  const idealLine = {
-    label: OV.ideal.label + ' ' + ideal.rpm + ' RPM',
-    data: [{ x: ideal.rpm, y: 0 }, { x: ideal.rpm, y: yMax }],
-    borderColor: OV.ideal.line + 'aa', backgroundColor: 'transparent',
-    borderWidth: 1.5, borderDash: [6, 3], pointRadius: 0, tension: 0, fill: false
-  };
-  const worstLine = {
-    label: OV.worst.label + ' ' + worst.rpm + ' RPM',
-    data: [{ x: worst.rpm, y: 0 }, { x: worst.rpm, y: yMax }],
-    borderColor: OV.worst.line + 'aa', backgroundColor: 'transparent',
-    borderWidth: 1.5, borderDash: [4, 2], pointRadius: 0, tension: 0, fill: false
-  };
-
-  // Append to existing pulley datasets
-  hubChart.data.datasets = [
-    ...hubChart.data.datasets,
-    idealLine, worstLine,
-    ...idealSets, ...worstSets
-  ];
-  hubChart.update('none');
-}
-
-// ── 2. FEAD Efficiency / SF Line Chart — patch renderFEADLineChart ────────────
-const _origFEADLine = renderFEADLineChart;
-function renderFEADLineChart() {
-  _origFEADLine();
-  if (!feadLineChart) return;
-
-  const ideal = getIdealMetrics();
-  const worst = getWorstMetrics();
-
-  // Compute eta & SF for ideal and worst
-  const iEta = parseFloat(ideal.fd.totals.eta);
-  const wEta = parseFloat(worst.fd.totals.eta);
-  const iSF  = ideal.minSF;
-  const wSF  = worst.minSF;
-
-  // Vertical lines across the full RPM sweep (500-2600)
-  const rpms = feadLineChart.data.labels; // already built [500…2600 step 50]
-  const nullArr = rpms.map(() => null);
-
-  const makeVLine = (targetRPM, color, label, yAxisID) => {
-    const idx = rpms.indexOf(targetRPM);
-    if (idx < 0) return null;
-    const d = rpms.map((_, i) => i === idx ? (yAxisID === 'yEta' ? 100 : 6) : null);
-    return {
-      label, data: d,
-      borderColor: color + 'cc', backgroundColor: 'transparent',
-      borderWidth: 1.5, borderDash: [5, 3], pointRadius: 0,
-      spanGaps: false, fill: false, yAxisID
-    };
-  };
-
-  // Scatter markers at ideal & worst for both y-axes
-  const idealEtaD  = rpms.map((r, i) => r === ideal.rpm ? iEta  : null);
-  const worstEtaD  = rpms.map((r, i) => r === worst.rpm ? wEta  : null);
-  const idealSFD   = rpms.map((r, i) => r === ideal.rpm ? iSF   : null);
-  const worstSFD   = rpms.map((r, i) => r === worst.rpm ? wSF   : null);
-
-  const mkMark = (data, color, label, yAxisID, shape) => ({
-    label, data,
-    borderColor: color, backgroundColor: color,
-    borderWidth: 0, pointRadius: 9, pointStyle: shape || 'circle',
-    pointHoverRadius: 11, showLine: false, fill: false, yAxisID,
-    spanGaps: false
-  });
-
-  feadLineChart.data.datasets = [
-    ...feadLineChart.data.datasets,
-    // vertical markers
-    makeVLine(ideal.rpm, OV.ideal.line, '✦ Ideal ' + ideal.rpm + ' RPM', 'yEta'),
-    makeVLine(worst.rpm, OV.worst.line, '⚠ Worst ' + worst.rpm + ' RPM', 'yEta'),
-    // η markers
-    mkMark(idealEtaD, OV.ideal.line, 'Ideal η ' + iEta.toFixed(1) + '%', 'yEta', 'triangle'),
-    mkMark(worstEtaD, OV.worst.line, 'Worst η ' + wEta.toFixed(1) + '%', 'yEta', 'rectRot'),
-    // SF markers
-    mkMark(idealSFD, OV.ideal.line, 'Ideal SF ' + iSF.toFixed(2), 'ySF', 'triangle'),
-    mkMark(worstSFD, OV.worst.line, 'Worst SF ' + wSF.toFixed(2), 'ySF', 'rectRot')
-  ].filter(Boolean);
-
-  feadLineChart.update('none');
-}
-
-// ── 3. Compliance Radar — patch renderComplianceRadar ────────────────────────
-const _origRadar = renderComplianceRadar;
-function renderComplianceRadar(c) {
-  _origRadar(c);
-  if (!complianceRadarChart) return;
-
-  const ideal = getIdealMetrics();
-  const worst = getWorstMetrics();
-  const iS = ideal.comp.scores;
-  const wS = worst.comp.scores;
-
-  const iData = [iS.efficiency, iS.slipSF, iS.hubLoads, iS.beltSpeed, iS.tension].map(v => +parseFloat(v).toFixed(0));
-  const wData = [wS.efficiency, wS.slipSF, wS.hubLoads, wS.beltSpeed, wS.tension].map(v => +parseFloat(v).toFixed(0));
-
-  complianceRadarChart.data.datasets = [
-    {
-      label: '⚠ Worst Case', data: wData,
-      borderColor: OV.worst.line, backgroundColor: OV.worst.fill,
-      borderWidth: 2, borderDash: [5, 3], pointRadius: 4,
-      pointBackgroundColor: OV.worst.line, order: 3
-    },
-    ...complianceRadarChart.data.datasets,   // ideal (built by original) + current
-    {
-      label: '✦ Ideal ' + ideal.rpm + ' RPM', data: iData,
-      borderColor: OV.ideal.line, backgroundColor: OV.ideal.fill,
-      borderWidth: 2, borderDash: [4, 3], pointRadius: 4,
-      pointBackgroundColor: OV.ideal.line, order: 1
-    }
-  ];
-  complianceRadarChart.options.plugins.legend.display = true;
-  complianceRadarChart.options.plugins.legend.labels = {
-    color: '#8899aa', font: { size: 11 }, boxWidth: 14,
-    filter: item => ['⚠ Worst Case', 'Current', '✦ Ideal ' + ideal.rpm + ' RPM', 'Ideal'].includes(item.text)
-  };
-  complianceRadarChart.update('none');
-}
-
-// ── 4. Drive Cycle Chart — patch renderDriveCycleChart ───────────────────────
-const _origDriveCycle = renderDriveCycleChart;
-function renderDriveCycleChart() {
-  _origDriveCycle();
-  if (!driveCycleChart) return;
-
-  const ideal = getIdealMetrics();
-  const worst = getWorstMetrics();
-
-  // Add horizontal bands: ideal hub load range and worst-case hub load
-  const pts = driveCycleChart.data.labels.length;
-
-  const hLine = (val, color, label, dash) => ({
-    label, type: 'line',
-    data: Array(pts).fill(val),
-    borderColor: color, backgroundColor: 'transparent',
-    borderWidth: 1.5, borderDash: dash || [], pointRadius: 0,
-    fill: false, tension: 0, order: 0
-  });
-
-  driveCycleChart.data.datasets = [
-    ...driveCycleChart.data.datasets,
-    hLine(ideal.hub.CRK,  OV.ideal.line + 'cc', '✦ Ideal CRK ' + ideal.hub.CRK.toFixed(0) + ' N',  [6, 3]),
-    hLine(ideal.hub.FAN,  OV.ideal.line + '88', '✦ Ideal FAN ' + ideal.hub.FAN.toFixed(0) + ' N',  [6, 3]),
-    hLine(worst.hub.CRK,  OV.worst.line + 'cc', '⚠ WC CRK '   + worst.hub.CRK.toFixed(0) + ' N',  [4, 2]),
-    hLine(worst.hub.FAN,  OV.worst.line + '88', '⚠ WC FAN '   + worst.hub.FAN.toFixed(0) + ' N',  [4, 2])
-  ];
-  driveCycleChart.update('none');
-}
-
-// ── Legend badge injector — show Ideal/Worst summary under each chart ─────────
-function injectOverlayLegend() {
-  const ideal = getIdealMetrics();
-  const worst = getWorstMetrics();
-
-  const badge = (label, rpm, tension, eta, sf, color) => `
-    <div class="ov-badge" style="border-color:${color}44;background:${color}0d">
-      <span class="ov-dot" style="background:${color}"></span>
-      <span class="ov-name" style="color:${color}">${label}</span>
-      <span class="ov-pill">${rpm} RPM</span>
-      <span class="ov-pill">${tension} N</span>
-      <span class="ov-pill">η ${eta}%</span>
-      <span class="ov-pill">SF ${sf}</span>
+    const html = `<div class="ov-legend-bar">
+      ${badge('\u2726','Ideal',    ideal.rpm, ideal.tension, ideal.eta.toFixed(1), ideal.sf.toFixed(2), '#34d399')}
+      ${badge('\u25c9','Current',  state.rpm, state.baseTension, curr_eta, curr_sf, '#4fc3f7')}
+      ${badge('\u26a0','Worst Case',worst.rpm, worst.tension, worst.eta.toFixed(1), worst.sf.toFixed(2), '#e63946')}
     </div>`;
 
-  const html = `
-    <div class="ov-legend-bar" id="ov-legend">
-      ${badge('✦ Ideal', ideal.rpm, ideal.tension, parseFloat(ideal.fd.totals.eta).toFixed(1), ideal.minSF.toFixed(2), '#34d399')}
-      ${badge('◉ Current', state.rpm, state.baseTension, computeFEAD().totals.eta, Math.min(...ORDER.map(n=>parseFloat(computeFEAD().pulleys[n].SF))).toFixed(2), '#4fc3f7')}
-      ${badge('⚠ Worst Case', worst.rpm, worst.tension, parseFloat(worst.fd.totals.eta).toFixed(1), worst.minSF.toFixed(2), '#e63946')}
-    </div>`;
-
-  ['hubload-chart','fead-line','compliance-radar','drive-cycle-chart'].forEach(id => {
-    const canvas = document.getElementById(id);
-    if (!canvas) return;
-    const container = canvas.closest('.card') || canvas.parentElement;
-    let existing = container.querySelector('.ov-legend-bar');
-    if (existing) existing.remove();
-    container.insertAdjacentHTML('beforeend', html);
-  });
-}
-
-// ── Wire overlays into updateAll ──────────────────────────────────────────────
-const _origUpdateAll = updateAll;
-function updateAll() {
-  _origUpdateAll();
-  // Overlays are injected by the patched chart functions above (called inside updateAll).
-  // Re-inject the legend badges after a short delay to let charts settle.
-  setTimeout(injectOverlayLegend, 300);
+    // Inject under each chart canvas
+    ['hubload-chart','fead-line','compliance-radar','drive-cycle-chart'].forEach(id => {
+      const canvas = document.getElementById(id);
+      if (!canvas) return;
+      const wrap = canvas.closest('.card-section') || canvas.closest('section') || canvas.parentElement;
+      let old = wrap ? wrap.querySelector('.ov-legend-bar') : null;
+      if (old) old.outerHTML = html;
+      else if (wrap) wrap.insertAdjacentHTML('beforeend', html);
+    });
+  } catch(e) { /* silent */ }
 }
