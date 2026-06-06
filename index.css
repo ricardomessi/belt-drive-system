@@ -1340,3 +1340,22 @@ body {
 @media(max-width:700px) {
   .wp-top-grid { grid-template-columns:1fr; }
 }
+
+/* ── Worst-case / Ideal overlay legend badges ── */
+.ov-legend-bar {
+  display:flex; flex-wrap:wrap; gap:0.6rem;
+  padding:0.7rem var(--card-pad) 0.9rem;
+  border-top:1px solid var(--border);
+}
+.ov-badge {
+  display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;
+  border:1px solid; border-radius:6px; padding:0.35rem 0.7rem;
+  font-family:var(--font-ui); font-size:0.72rem;
+}
+.ov-dot  { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.ov-name { font-family:var(--font-head); font-weight:700; font-size:0.75rem; white-space:nowrap; }
+.ov-pill {
+  background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
+  border-radius:3px; padding:1px 6px; font-family:var(--font-mono);
+  font-size:0.68rem; color:var(--text-dim); white-space:nowrap;
+}
