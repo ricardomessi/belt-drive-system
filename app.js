@@ -354,23 +354,52 @@ function draw2D() {
   ctx.save(); ctx.translate(12, 52); ctx.rotate(-Math.PI/2);
   ctx.fillStyle = '#44ff44'; ctx.fillText('Y (mm)', 0, 0); ctx.restore();
 
-  // Belt spans — animated dashes, width driven by hub-load
+  // ── Closed Belt Path — spans + arcs around every pulley ──────────────────
   const avgF = Object.values(hubData).reduce((s, d) => s + (d ? d.F : 0), 0) / ORDER.length;
   const beltWidth = Math.max(2, Math.min(6, 2 + avgF / 800));
+
+  // Build per-pulley arc descriptors from incoming/outgoing tangent points
+  function beltArcs() {
+    const arcs = {};
+    for (let i = 0; i < ORDER.length; i++) {
+      const n    = ORDER[i];
+      const prev = ORDER[(i - 1 + ORDER.length) % ORDER.length];
+      const p    = PULLEYS[n];
+      const sIn  = spans[prev];  // span arriving at n — ends at sIn.t2
+      const sOut = spans[n];     // span leaving from n — starts at sOut.t1
+      if (!sIn || !sOut) continue;
+      const startAngle = Math.atan2(sIn.t2.y  - p.y, sIn.t2.x  - p.x);
+      const endAngle   = Math.atan2(sOut.t1.y - p.y, sOut.t1.x - p.x);
+      arcs[n] = { cx:p.x, cy:p.y, r:p.r, startAngle, endAngle, ccw:!p.cw };
+    }
+    return arcs;
+  }
+  const arcs = beltArcs();
 
   ctx.save();
   ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 10;
   ctx.strokeStyle = '#ffd700'; ctx.lineWidth = beltWidth;
   ctx.setLineDash([14, 9]);
   ctx.lineDashOffset = dashOffset2D;
-  for (const n of ORDER) {
-    const s = spans[n];
-    if (!s) continue;
-    ctx.beginPath();
-    ctx.moveTo(tx(s.t1.x), ty(s.t1.y));
-    ctx.lineTo(tx(s.t2.x), ty(s.t2.y));
-    ctx.stroke();
+
+  ctx.beginPath();
+  let firstMove = true;
+  for (let i = 0; i < ORDER.length; i++) {
+    const n    = ORDER[i];
+    const sOut = spans[n];
+    const arc  = arcs[n];
+    if (!sOut || !arc) continue;
+    if (firstMove) {
+      ctx.moveTo(tx(arc.cx + arc.r * Math.cos(arc.startAngle)),
+                 ty(arc.cy + arc.r * Math.sin(arc.startAngle)));
+      firstMove = false;
+    }
+    ctx.arc(tx(arc.cx), ty(arc.cy), arc.r * sc,
+            arc.startAngle, arc.endAngle, arc.ccw);
+    ctx.lineTo(tx(sOut.t2.x), ty(sOut.t2.y));
   }
+  ctx.closePath();
+  ctx.stroke();
   ctx.restore();
 
   // Pulleys
@@ -1375,7 +1404,7 @@ function resizeCanvases() {
   }
 }
 
-// ── Canvas 2D Interactivity — Pulley Hover ───────────────────────────────────
+// ── Canvas 2D Interactivity — Hover + Drag to Move ───────────────────────────
 function initCanvas2DInteraction() {
   const canvas = document.getElementById('canvas2d');
   const tip    = document.getElementById('canvas-pulley-tip');
@@ -1393,42 +1422,57 @@ function initCanvas2DInteraction() {
     AC: 'Air conditioning compressor. High load when clutch engaged.',
     TEN:'Spring-loaded tensioner. Maintains belt tension as it stretches with wear.'
   };
+  const DRAGGABLE = new Set(['FAN','IDR','ALT','AC','TEN']);
 
-  canvas.addEventListener('mousemove', (e) => {
+  let dragTarget = null, dragOffX = 0, dragOffY = 0;
+
+  function worldCoords(e) {
     const rect = canvas.getBoundingClientRect();
-    // Canvas pixel coords
     const px = (e.clientX - rect.left) * (canvas.width  / rect.width);
     const py = (e.clientY - rect.top)  * (canvas.height / rect.height);
+    const { PAD, sc, minX, minY, H } = _2d;
+    return { x: (px - PAD) / sc + minX, y: -(py - (H - PAD)) / sc + minY };
+  }
 
-    // Reverse-project to world coords
-    const { PAD, sc, minX, minY } = _2d;
-    const worldX = (px - PAD) / sc + minX;
-    const worldY = -(py - (_2d.H - PAD)) / sc + minY;
-
-    // Hit-test every pulley (use 1.5x radius for easy hovering)
-    let hit = null;
+  function hitTest(wx, wy) {
     for (const n of ORDER) {
       const p = PULLEYS[n];
-      const dist = Math.hypot(worldX - p.x, worldY - p.y);
-      if (dist <= p.r * 1.6) { hit = n; break; }
+      if (Math.hypot(wx - p.x, wy - p.y) <= p.r * 1.6) return n;
     }
+    return null;
+  }
 
-    if (!hit) {
+  canvas.addEventListener('mousedown', (e) => {
+    const { x, y } = worldCoords(e);
+    const hit = hitTest(x, y);
+    if (hit && DRAGGABLE.has(hit)) {
+      dragTarget = hit;
+      dragOffX = x - PULLEYS[hit].x;
+      dragOffY = y - PULLEYS[hit].y;
+      canvas.style.cursor = 'grabbing';
       tip.style.display = 'none';
-      canvas.style.cursor = 'crosshair';
+      e.preventDefault();
+    }
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    const { x, y } = worldCoords(e);
+    if (dragTarget) {
+      PULLEYS[dragTarget].x = x - dragOffX;
+      PULLEYS[dragTarget].y = y - dragOffY;
+      compute();
       return;
     }
-
-    canvas.style.cursor = 'pointer';
-    const p  = PULLEYS[hit];
-    const hd = hubData[hit];
-    const pdf= PDF[hit];
-
+    const hit = hitTest(x, y);
+    if (!hit) { tip.style.display = 'none'; canvas.style.cursor = 'crosshair'; return; }
+    canvas.style.cursor = DRAGGABLE.has(hit) ? 'grab' : 'pointer';
+    const p   = PULLEYS[hit];
+    const hd  = hubData[hit];
+    const pdf = PDF[hit];
     const pulleyRPM = (state.rpm * PULLEYS.CRK.eff / p.eff).toFixed(0);
     const dF = hd ? (hd.F - pdf.F).toFixed(0) : '—';
-    const dFsign = +dF >= 0 ? '+' : '';
+    const dFsign  = +dF >= 0 ? '+' : '';
     const dFcolor = Math.abs(+dF) > 300 ? '#f87171' : '#52b788';
-
     tip.innerHTML = `
       <div class="tip-name" style="color:${p.color}">${hit} — ${FULL_NAMES[hit]}</div>
       <div class="tip-row"><span>Position</span><span>(${p.x.toFixed(0)}, ${p.y.toFixed(0)}) mm</span></div>
@@ -1440,149 +1484,51 @@ function initCanvas2DInteraction() {
       <div class="tip-row"><span>T_out</span><span>${hd.T_out.toFixed(0)} N</span></div>
       <div class="tip-force">⇒ Hub Load: ${hd.F.toFixed(0)} N @ ${hd.dir.toFixed(1)}°
         &nbsp;<span style="font-size:0.75rem;font-weight:400;color:${dFcolor}">(${dFsign}${dF} N vs PDF)</span>
-      </div>
-      ` : ''}
+      </div>` : ''}
       <div style="margin-top:0.5rem;padding-top:0.4rem;border-top:1px solid #1c2840;
         font-size:0.72rem;color:#4a5c78;font-family:'IBM Plex Sans',sans-serif;line-height:1.5">
-        ${DESCRIPTIONS[hit]}
+        ${DRAGGABLE.has(hit) ? '🖐 Drag to reposition · ' : ''}${DESCRIPTIONS[hit]}
       </div>`;
-
-    // Position tooltip so it doesn’t clip off screen
+    const rect = canvas.getBoundingClientRect();
     const tipW = 260, tipH = 220;
-    const canvasRight = rect.right;
-    const canvasBottom = rect.bottom;
     let tx2 = e.clientX - rect.left + 16;
     let ty2 = e.clientY - rect.top  + 16;
     if (tx2 + tipW > rect.width  - 8) tx2 = e.clientX - rect.left - tipW - 8;
     if (ty2 + tipH > rect.height - 8) ty2 = e.clientY - rect.top  - tipH - 8;
-    tip.style.left    = tx2 + 'px';
-    tip.style.top     = ty2 + 'px';
+    tip.style.left = tx2 + 'px'; tip.style.top = ty2 + 'px';
     tip.style.display = 'block';
   });
 
-  canvas.addEventListener('mouseleave', () => {
-    tip.style.display = 'none';
-    canvas.style.cursor = 'crosshair';
-  });
-}
-
-window.addEventListener('load', () => {
-  resizeCanvases();
-  compute();
-  renderTable();
-  renderGearSummary();
-  initThree();
-  animateThree();
-  loop2D();
-  initGearUI();
-  initChart();
-  initTooltips();
-  initCanvas2DInteraction();
-
-  // Build chart data and render
-  buildChartData();
-  updateChart();
-  renderInsights();
-  initOpModes();
-  initDriveCycleChart();
-  initFEADCharts();
-  initComplianceDashboard();
-  initPDFReport();
-  initMaterialDashboard();
-  renderDiscrepancyPanel();
-
-  ['rpm','tension','tensioner'].forEach(id =>
-    document.getElementById(id).addEventListener('input', updateAll)
-  );
-  const xlBtn = document.getElementById('download-excel');
-  if (xlBtn) xlBtn.addEventListener('click', downloadExcel);
-  window.addEventListener('resize', resizeCanvases);
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
-// OPERATING MODE PRESETS
-// ══════════════════════════════════════════════════════════════════════════════
-function initOpModes() {
-  const grid = document.getElementById('opmodes-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  OP_MODES.forEach(mode => {
-    const card = document.createElement('div');
-    card.className = 'opmode-card';
-    card.id = 'opmode-' + mode.id;
-    card.style.setProperty('--mode-accent', mode.accent);
-    card.innerHTML = `
-      <div class="opmode-icon">${mode.icon}</div>
-      <div class="opmode-name">${mode.name}</div>
-      <div class="opmode-rpm">${mode.rpm} RPM · ${mode.tension} N tension</div>
-      <div class="opmode-teaser">${mode.teaser}</div>`;
-    card.addEventListener('click', () => activateOpMode(mode));
-    grid.appendChild(card);
-  });
-
-  const closeBtn = document.getElementById('opmode-close');
-  if (closeBtn) closeBtn.addEventListener('click', () => {
-    document.getElementById('opmode-detail').style.display = 'none';
-    document.querySelectorAll('.opmode-card').forEach(c => c.classList.remove('active'));
-  });
-}
-
-function activateOpMode(mode) {
-  // Highlight card
-  document.querySelectorAll('.opmode-card').forEach(c => c.classList.remove('active'));
-  const card = document.getElementById('opmode-' + mode.id);
-  if (card) card.classList.add('active');
-
-  // Apply RPM + tension to sliders
-  const rpmEl = document.getElementById('rpm');
-  const tenEl = document.getElementById('tension');
-  if (rpmEl) { rpmEl.value = mode.rpm; document.getElementById('rpm-val').textContent = mode.rpm + ' RPM'; }
-  if (tenEl) { tenEl.value = mode.tension; document.getElementById('tension-val').textContent = mode.tension + ' N'; }
-  state.rpm = mode.rpm;
-  state.baseTension = mode.tension;
-  compute();
-  renderTable();
-  renderGearSummary();
-  renderInsights();
-  buildChartData();
-  updateChart();
-
-  // Show detail panel
-  const detail = document.getElementById('opmode-detail');
-  document.getElementById('opmode-detail-icon').textContent = mode.icon;
-  document.getElementById('opmode-detail-name').textContent = mode.name;
-  document.getElementById('opmode-detail-name').style.color = mode.accent;
-  document.getElementById('opmode-detail-scenario').textContent = mode.scenario;
-  document.getElementById('opmode-detail-mechanism').textContent = mode.mechanism;
-
-  const riskEl = document.getElementById('opmode-detail-risks');
-  riskEl.innerHTML = mode.risks.map(r => `<li>${r}</li>`).join('');
-
-  // Hub load results
-  const results = document.getElementById('opmode-results');
-  const worst = mode.worstPulley;
-  let html = `<div class="opmode-mech-label">📊 Computed hub loads at ${mode.rpm} RPM</div>`;
-  for (const n of ORDER) {
-    const hd = hubData[n];
-    const pdf = PDF[n];
-    if (!hd) continue;
-    const dF = (hd.F - pdf.F).toFixed(0);
-    const sign = +dF >= 0 ? '+' : '';
-    const hi = Math.abs(+dF) > 300;
-    html += `<div class="opmode-result-row">
-      <span class="opmode-result-label" style="color:${PULLEYS[n].color}">${n}</span>
-      <span class="opmode-result-val ${hi?'hi':'ok'}">${hd.F.toFixed(0)} N <span style="font-size:0.65rem;opacity:.7">(${sign}${dF} vs PDF)</span></span>
-    </div>`;
+  function stopDrag() {
+    if (dragTarget) { dragTarget = null; canvas.style.cursor = 'crosshair'; }
   }
-  if (worst) {
-    const hd = hubData[worst];
-    const pdfF = PDF[worst].F;
-    if (hd && hd.F > pdfF * 1.1) {
-      html += `<div style="margin-top:.5rem;padding:.4rem .5rem;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.3);border-radius:4px;font-size:.72rem;color:#f87171;font-family:var(--font-ui)">
-        ⚠ ${worst} hub load ${hd.F.toFixed(0)} N exceeds PDF baseline ${pdfF} N by ${((hd.F/pdfF-1)*100).toFixed(1)}%
-      </div>`;
+  canvas.addEventListener('mouseup', stopDrag);
+  canvas.addEventListener('mouseleave', () => { stopDrag(); tip.style.display = 'none'; });
+
+  // Touch support
+  canvas.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    const me = { clientX: t.clientX, clientY: t.clientY };
+    const { x, y } = worldCoords(me);
+    const hit = hitTest(x, y);
+    if (hit && DRAGGABLE.has(hit)) {
+      dragTarget = hit; dragOffX = x - PULLEYS[hit].x; dragOffY = y - PULLEYS[hit].y;
+      e.preventDefault();
     }
-  }
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (!dragTarget) return;
+    const t = e.touches[0];
+    const me = { clientX: t.clientX, clientY: t.clientY };
+    const { x, y } = worldCoords(me);
+    PULLEYS[dragTarget].x = x - dragOffX;
+    PULLEYS[dragTarget].y = y - dragOffY;
+    compute(); e.preventDefault();
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', stopDrag);
+}
   results.innerHTML = html;
   setTimeout(makeTableSortable, 50);
   detail.style.display = 'block';
