@@ -1,4 +1,4 @@
-﻿/* app.js – V-Ribbed Belt Drive v2 – Physics Engine + 2D + 3D + Gear-Driven + Hub-Load Chart */
+/* app.js – V-Ribbed Belt Drive v2 – Physics Engine + 2D + 3D + Gear-Driven + Hub-Load Chart */
 'use strict';
 
 // ── PDF Datum Values ──────────────────────────────────────────────────────────
@@ -423,8 +423,11 @@ function draw2D() {
                  ty(arc.cy + arc.r * Math.sin(arc.startAngle)));
       firstMove = false;
     }
+    // Negate angles: world coords have Y-up, canvas has Y-down.
+    // Negating maps world angles to canvas angles correctly so arcs wrap
+    // around the outside of each pulley (not through it).
     ctx.arc(tx(arc.cx), ty(arc.cy), arc.r * sc,
-            arc.startAngle, arc.endAngle, arc.ccw);
+            -arc.startAngle, -arc.endAngle, arc.ccw);
     ctx.lineTo(tx(sOut.t2.x), ty(sOut.t2.y));
   }
   ctx.closePath();
