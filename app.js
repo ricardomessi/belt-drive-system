@@ -354,25 +354,71 @@ function draw2D() {
   ctx.save(); ctx.translate(12, 52); ctx.rotate(-Math.PI/2);
   ctx.fillStyle = '#44ff44'; ctx.fillText('Y (mm)', 0, 0); ctx.restore();
 
-  // ── Belt spans — straight tangent lines along pulley borders ─────────────
-  // Each line runs from the tangent departure point on one pulley to the
-  // tangent arrival point on the next pulley, touching the border exactly.
+  // ── Belt path — tangent lines + boundary arcs along every pulley ─────────
   const avgF = Object.values(hubData).reduce((s, d) => s + (d ? d.F : 0), 0) / ORDER.length;
   const beltWidth = Math.max(2, Math.min(6, 2 + avgF / 800));
+
+  // Centroid of all pulleys (used to determine which side is "outside")
+  const centX = ORDER.reduce((s,n) => s + PULLEYS[n].x, 0) / ORDER.length;
+  const centY = ORDER.reduce((s,n) => s + PULLEYS[n].y, 0) / ORDER.length;
 
   ctx.save();
   ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 10;
   ctx.strokeStyle = '#ffd700'; ctx.lineWidth = beltWidth;
   ctx.setLineDash([14, 9]);
   ctx.lineDashOffset = dashOffset2D;
-  for (const n of ORDER) {
-    const s = spans[n];
-    if (!s) continue;
-    ctx.beginPath();
-    ctx.moveTo(tx(s.t1.x), ty(s.t1.y));
-    ctx.lineTo(tx(s.t2.x), ty(s.t2.y));
-    ctx.stroke();
+
+  ctx.beginPath();
+  let beltStarted = false;
+
+  for (let i = 0; i < ORDER.length; i++) {
+    const n    = ORDER[i];
+    const prev = ORDER[(i - 1 + ORDER.length) % ORDER.length];
+    const p    = PULLEYS[n];
+    const sIn  = spans[prev]; // incoming span — arrives at sIn.t2
+    const sOut = spans[n];    // outgoing span — departs from sOut.t1
+    if (!sIn || !sOut) continue;
+
+    // Angles on pulley boundary where belt arrives and departs
+    const aIn  = Math.atan2(sIn.t2.y  - p.y, sIn.t2.x  - p.x);
+    const aOut = Math.atan2(sOut.t1.y - p.y, sOut.t1.x - p.x);
+
+    // Determine wrap direction: try CW and CCW, pick the one whose
+    // midpoint is FARTHER from the centroid (= outside of the belt loop)
+    function arcMid(a1, a2, ccw) {
+      let sweep = ccw ? (a2 - a1) : (a1 - a2);
+      if (sweep < 0) sweep += 2 * Math.PI;
+      const mid = ccw ? (a1 + sweep / 2) : (a1 - sweep / 2);
+      return { x: p.x + p.r * Math.cos(mid), y: p.y + p.r * Math.sin(mid) };
+    }
+    const midCCW = arcMid(aIn, aOut, true);
+    const midCW  = arcMid(aIn, aOut, false);
+    const distCCW = Math.hypot(midCCW.x - centX, midCCW.y - centY);
+    const distCW  = Math.hypot(midCW.x  - centX, midCW.y  - centY);
+    const goCCW = distCCW >= distCW;
+
+    // Draw polyline arc along boundary (16 segments for smoothness)
+    const SEGS = 16;
+    let sweep = goCCW ? (aOut - aIn) : (aIn - aOut);
+    if (sweep < 0) sweep += 2 * Math.PI;
+
+    if (!beltStarted) {
+      // Start at the arrival tangent point
+      ctx.moveTo(tx(p.x + p.r * Math.cos(aIn)), ty(p.y + p.r * Math.sin(aIn)));
+      beltStarted = true;
+    }
+
+    for (let s = 1; s <= SEGS; s++) {
+      const frac = s / SEGS;
+      const a = goCCW ? (aIn + sweep * frac) : (aIn - sweep * frac);
+      ctx.lineTo(tx(p.x + p.r * Math.cos(a)), ty(p.y + p.r * Math.sin(a)));
+    }
+
+    // Straight span to next pulley's arrival point
+    ctx.lineTo(tx(sOut.t2.x), ty(sOut.t2.y));
   }
+  ctx.closePath();
+  ctx.stroke();
   ctx.restore();
 
   // Pulleys
