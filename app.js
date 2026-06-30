@@ -1502,6 +1502,84 @@ function initCanvas2DInteraction() {
 
   canvas.addEventListener('touchend', stopDrag);
 }
+
+function initOpModes() {
+  const grid = document.getElementById('opmodes-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  OP_MODES.forEach(mode => {
+    const card = document.createElement('div');
+    card.className = 'opmode-card';
+    card.id = 'opmode-' + mode.id;
+    card.style.setProperty('--mode-accent', mode.accent);
+    card.innerHTML = `
+      <div class="opmode-icon">${mode.icon}</div>
+      <div class="opmode-name">${mode.name}</div>
+      <div class="opmode-rpm">${mode.rpm} RPM · ${mode.tension} N tension</div>
+      <div class="opmode-teaser">${mode.teaser}</div>`;
+    card.addEventListener('click', () => activateOpMode(mode));
+    grid.appendChild(card);
+  });
+
+  const closeBtn = document.getElementById('opmode-close');
+  if (closeBtn) closeBtn.addEventListener('click', () => {
+    document.getElementById('opmode-detail').style.display = 'none';
+    document.querySelectorAll('.opmode-card').forEach(c => c.classList.remove('active'));
+  });
+}
+
+function activateOpMode(mode) {
+  document.querySelectorAll('.opmode-card').forEach(c => c.classList.remove('active'));
+  const card = document.getElementById('opmode-' + mode.id);
+  if (card) card.classList.add('active');
+
+  const rpmEl = document.getElementById('rpm');
+  const tenEl = document.getElementById('tension');
+  if (rpmEl) { rpmEl.value = mode.rpm; document.getElementById('lbl-rpm').textContent = mode.rpm + ' RPM'; }
+  if (tenEl) { tenEl.value = mode.tension; document.getElementById('lbl-tension').textContent = mode.tension + ' N'; }
+  state.rpm = mode.rpm;
+  state.baseTension = mode.tension;
+  compute();
+  renderTable();
+  renderGearSummary();
+  renderInsights();
+  buildChartData();
+  updateChart();
+
+  const detail = document.getElementById('opmode-detail');
+  document.getElementById('opmode-detail-icon').textContent = mode.icon;
+  document.getElementById('opmode-detail-name').textContent = mode.name;
+  document.getElementById('opmode-detail-name').style.color = mode.accent;
+  document.getElementById('opmode-detail-scenario').textContent = mode.scenario;
+  document.getElementById('opmode-detail-mechanism').textContent = mode.mechanism;
+
+  const riskEl = document.getElementById('opmode-detail-risks');
+  riskEl.innerHTML = mode.risks.map(r => `<li>${r}</li>`).join('');
+
+  const results = document.getElementById('opmode-results');
+  const worst = mode.worstPulley;
+  let html = `<div class="opmode-mech-label">Computed hub loads at ${mode.rpm} RPM</div>`;
+  for (const n of ORDER) {
+    const hd = hubData[n];
+    const pdf = PDF[n];
+    if (!hd) continue;
+    const dF = (hd.F - pdf.F).toFixed(0);
+    const sign = +dF >= 0 ? '+' : '';
+    const hi = Math.abs(+dF) > 300;
+    html += `<div class="opmode-result-row">
+      <span class="opmode-result-label" style="color:${PULLEYS[n].color}">${n}</span>
+      <span class="opmode-result-val ${hi?'hi':'ok'}">${hd.F.toFixed(0)} N <span style="font-size:0.65rem;opacity:.7">(${sign}${dF} vs PDF)</span></span>
+    </div>`;
+  }
+  if (worst) {
+    const hd = hubData[worst];
+    const pdfF = PDF[worst].F;
+    if (hd && hd.F > pdfF * 1.1) {
+      html += `<div style="margin-top:.5rem;padding:.4rem .5rem;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.3);border-radius:4px;font-size:.72rem;color:#f87171;font-family:var(--font-ui)">
+        ${worst} hub load ${hd.F.toFixed(0)} N exceeds PDF baseline ${pdfF} N by ${((hd.F/pdfF-1)*100).toFixed(1)}%
+      </div>`;
+    }
+  }
   results.innerHTML = html;
   setTimeout(makeTableSortable, 50);
   detail.style.display = 'block';
@@ -1509,6 +1587,38 @@ function initCanvas2DInteraction() {
   renderComplianceDashboard();
   renderFrictionTable();
 }
+
+window.addEventListener('load', () => {
+  resizeCanvases();
+  compute();
+  renderTable();
+  renderGearSummary();
+  initThree();
+  animateThree();
+  loop2D();
+  initGearUI();
+  initChart();
+  initTooltips();
+  initCanvas2DInteraction();
+
+  buildChartData();
+  updateChart();
+  renderInsights();
+  initOpModes();
+  initDriveCycleChart();
+  initFEADCharts();
+  initComplianceDashboard();
+  initPDFReport();
+  initMaterialDashboard();
+  renderDiscrepancyPanel();
+
+  ['rpm','tension','tensioner'].forEach(id =>
+    document.getElementById(id).addEventListener('input', updateAll)
+  );
+  const xlBtn = document.getElementById('download-excel');
+  if (xlBtn) xlBtn.addEventListener('click', downloadExcel);
+  window.addEventListener('resize', resizeCanvases);
+});
 
 // ══════════════════════════════════════════════════════════════════════════════
 // DRIVE CYCLE CHART
