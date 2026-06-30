@@ -358,19 +358,48 @@ function draw2D() {
   const avgF = Object.values(hubData).reduce((s, d) => s + (d ? d.F : 0), 0) / ORDER.length;
   const beltWidth = Math.max(2, Math.min(6, 2 + avgF / 800));
 
-  // Build per-pulley arc descriptors from incoming/outgoing tangent points
+  /**
+   * Compute the correct canvas arc direction so the belt wraps AROUND each
+   * pulley rather than cutting through it.
+   *
+   * Rule: choose the arc (CW or CCW) whose angular sweep matches the
+   * belt routing geometry:
+   *   outer tangent -> shorter arc (<= π)
+   *   inner tangent -> longer  arc (>  π, belt wraps further around)
+   */
   function beltArcs() {
     const arcs = {};
+    const TWO_PI = 2 * Math.PI;
+
     for (let i = 0; i < ORDER.length; i++) {
       const n    = ORDER[i];
       const prev = ORDER[(i - 1 + ORDER.length) % ORDER.length];
       const p    = PULLEYS[n];
-      const sIn  = spans[prev];  // span arriving at n — ends at sIn.t2
+      const sIn  = spans[prev];  // span arriving at n  — ends   at sIn.t2
       const sOut = spans[n];     // span leaving from n — starts at sOut.t1
       if (!sIn || !sOut) continue;
+
       const startAngle = Math.atan2(sIn.t2.y  - p.y, sIn.t2.x  - p.x);
       const endAngle   = Math.atan2(sOut.t1.y - p.y, sOut.t1.x - p.x);
-      arcs[n] = { cx:p.x, cy:p.y, r:p.r, startAngle, endAngle, ccw:!p.cw };
+
+      // Angular sweep in CW and CCW directions (always positive 0..2π)
+      let sweepCCW = endAngle - startAngle;
+      if (sweepCCW < 0) sweepCCW += TWO_PI;
+      const sweepCW = TWO_PI - sweepCCW;
+
+      // For inner tangent spans the belt wraps the "long way" (> π);
+      // for outer tangent spans it takes the short arc (< π).
+      const spanType = SPAN_TYPES[n];        // 'outer' or 'inner'
+      let ccw;
+      if (spanType === 'outer') {
+        // shorter arc
+        ccw = sweepCCW <= sweepCW;           // CCW if CCW-sweep is shorter
+      } else {
+        // longer arc
+        ccw = sweepCCW >= sweepCW;           // CCW if CCW-sweep is longer
+      }
+
+      arcs[n] = { cx:p.x, cy:p.y, r:p.r, startAngle, endAngle, ccw };
     }
     return arcs;
   }
