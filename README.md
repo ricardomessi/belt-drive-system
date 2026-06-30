@@ -1,6 +1,6 @@
 ﻿# FEAD Belt Drive System — Technical Analysis Web Application
 
-> **Front End Accessory Drive (FEAD) engineering analysis tool for the Ashok Leyland H6 engine with Gates MT820 8PK AMD Aramid belt.**
+> **Front End Accessory Drive (FEAD) engineering analysis tool for the H6 OEM Engine engine with Reference MT820 8PK AMD Aramid belt.**
 
 [![GitHub Pages](https://img.shields.io/badge/Live%20Demo-GitHub%20Pages-blue?logo=github)](https://ricardomessi.github.io/fead-belt-drive-system/)
 
@@ -13,7 +13,7 @@ A complete browser-based **FEAD engineering analysis website** that computes in 
 | Feature | Details |
 |---|---|
 | **Belt Slip Analysis** | Eytelwein / Capstan equation per pulley — slip safety factor (SF) |
-| **Hub Load Computation** | Vector-sum tangent geometry for all 6 pulleys vs Gates PDF limits |
+| **Hub Load Computation** | Vector-sum tangent geometry for all 6 pulleys vs Reference PDF limits |
 | **FEAD Efficiency** | Bending, bearing, slip, and centrifugal losses — η in % |
 | **Tension Optimiser** | Minimum static pre-load for SF ≥ 1.3 at any RPM |
 | **Drive Cycle Analysis** | WLTC vs NEDC worst-case hub loads and SF margins |
@@ -23,7 +23,7 @@ A complete browser-based **FEAD engineering analysis website** that computes in 
 | **PDF Report** | 8-page professional engineering report (jsPDF, auto-generated) |
 
 ### Data Sources
-- Gates Accessory Belt Drive PDF — DB Ver 2.45.0.0
+- Reference Accessory Belt Drive PDF — DB Ver 2.45.0.0
 - C&U Group WR25153 fan bearing calculation — QZ20230803
 - ISO 9981:2018 (belt slip safety)
 

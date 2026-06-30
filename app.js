@@ -1,4 +1,4 @@
-﻿/* app.js – Gates Belt Drive v2 – Physics Engine + 2D + 3D + Gear-Driven + Hub-Load Chart */
+﻿/* app.js – V-Ribbed Belt Drive v2 – Physics Engine + 2D + 3D + Gear-Driven + Hub-Load Chart */
 'use strict';
 
 // ── PDF Datum Values ──────────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ const CU_VALIDATION = {
   radialForceFr_N: 358,
   bearingLife: { L10A:17820, L10B:3860, L10_composite:3305, Cr_roller:38179, Cr_ball:19035 },
   shaftBearingLoads: { P_ball:1669.49, P_roller:5298.5, P1:4088.36, P2:672.64 },
-  note:'C&U Page3 tensioner uses fan-shaft coordinates (different datum from Gates global XY). MEAN F_hub=438.6N (C&U method) vs Gates 593.9N — different tension model, not a mismatch.'
+  note:'C&U Page3 tensioner uses fan-shaft coordinates (different datum from Reference global XY). MEAN F_hub=438.6N (C&U method) vs Reference 593.9N — different tension model, not a mismatch.'
 };
 
 // ── Drive Cycle Definitions ───────────────────────────────────────────────────
@@ -508,7 +508,7 @@ function downloadExcel() {
 
   // Sheet 1: Hub-Load Results
   const wsData = [
-    ['Gates Belt Drive – Hub-Load Report'],
+    ['V-Ribbed Belt Drive – Hub-Load Report'],
     [`Engine Speed: ${state.rpm} RPM | Belt Tension: ${state.baseTension} N | Tensioner: ${TEN_POS[state.tenIdx].label} (${TEN_POS[state.tenIdx].arm}°)`],
     [],
     ['Pulley', 'T_in (N)', 'T_out (N)', 'F_hub (N)', 'Dir (°)', 'PDF F (N)', 'PDF Dir (°)', 'ΔF (N)', 'ΔDir (°)']
@@ -560,7 +560,7 @@ function downloadExcel() {
   XLSX.utils.book_append_sheet(wb, ws2, 'Load vs RPM Sweep');
   XLSX.utils.book_append_sheet(wb, ws3, 'Gear-Driven Accessories');
 
-  XLSX.writeFile(wb, `gates_hubload_${state.rpm}rpm.xlsx`);
+  XLSX.writeFile(wb, `Reference_hubload_${state.rpm}rpm.xlsx`);
 }
 
 // ── Gear-Driven UI ────────────────────────────────────────────────────────────
@@ -885,7 +885,7 @@ function createBeltTexture() {
     ctx.fillStyle = '#000'; ctx.font = 'bold 9px Arial'; ctx.textAlign = 'center';
     ctx.fillText('G', ox + 34, 34);
     ctx.fillStyle = '#fff'; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'left';
-    ctx.fillText('Gates', ox + 56, 28);
+    ctx.fillText('Reference', ox + 56, 28);
     ctx.fillStyle = '#8f9fb8'; ctx.font = '9px Courier New';
     ctx.fillText('MICRO-V\u00ae  8PK1577 ARAMID', ox + 56, 44);
     ctx.fillStyle = '#f4d03f'; ctx.font = 'bold 11px Arial';
@@ -1963,7 +1963,7 @@ function sortTable(table, colIdx, dir) {
 // FEAD EFFICIENCY DASHBOARD — Physics Engine
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Physical constants for Gates Micro-V MT820 AMD 8-rib aramid belt
+// Physical constants for Micro-V MT820 AMD 8-rib aramid belt
 const BELT_PARAMS = {
   mu: 0.35,          // friction coefficient, PK belt on grooved pulley (dry)
   mu_back: 0.25,     // back-side (smooth) friction coefficient (IDR, TEN)
@@ -2412,19 +2412,19 @@ function renderFEADTable(fd) {
 // IDEAL WORKING CONDITION & COMPLIANCE DASHBOARD
 // ══════════════════════════════════════════════════════════════════════════════
 
-// ── Ideal Design Envelope (from Gates PDF + ISO 9981 + C&U data) ─────────────
+// ── Ideal Design Envelope (from Reference PDF + ISO 9981 + C&U data) ─────────────
 const IDEAL = {
   rpm:       { value:1200, min:800,  max:1800, label:'Engine RPM', unit:'RPM',
                note:'PDF design reference: 1200 RPM. Optimal FEAD efficiency at 1200-1600 RPM.' },
   tension:   { value:null, min:1800, max:3500, label:'Belt Tension', unit:'N',
                note:'Computed per SF=1.3 (Capstan eq). Must not exceed max to avoid bearing overload.' },
-  tenIdx:    { value:2,   label:'Tensioner Position', note:'MEAN arm position (15.4°) per Gates PDF Sheet 2.' },
+  tenIdx:    { value:2,   label:'Tensioner Position', note:'MEAN arm position (15.4°) per Reference PDF Sheet 2.' },
   beltSpeed: { min:8,  max:22, ideal:13.4, label:'Belt Speed', unit:'m/s',
                note:'Optimal: 8–22 m/s. Above 22 m/s: centrifugal tension dominates. Below 8: high span tension per kW.' },
   slipSF:    { min:1.3, ideal:1.6, label:'Min Slip Safety Factor',
                note:'Capstan SF target ≥1.3. Values <1.0 cause belt slip and accelerated wear.' },
   efficiency:{ min:96, ideal:97.5, label:'FEAD Efficiency', unit:'%',
-               note:'Target >96%. Aramid + optimal tension achieves 97–98.5% (Gates MT820 AMD spec).' },
+               note:'Target >96%. Aramid + optimal tension achieves 97–98.5% (Reference MT820 AMD spec).' },
   fanLoad:   { max:2866.4, label:'FAN Hub Load', unit:'N', note:'PDF certified peak: 2866.4 N (C&U L10=3305h).' },
   crkLoad:   { max:2658.9, label:'CRK Hub Load', unit:'N', note:'PDF certified peak: 2658.9 N.' },
   altLoad:   { max:1235.2, label:'ALT Hub Load', unit:'N', note:'PDF certified peak: 1235.2 N.' },
@@ -2559,7 +2559,7 @@ function renderComplianceVerdict(c) {
   if (!el) return;
   el.className = 'compliance-verdict verdict-' + (c.grade==='COMPLIANT'?'compliant':c.grade==='MARGINAL'?'marginal':'fail');
   const subtexts = {
-    'COMPLIANT': `All design parameters within Gates PDF and ISO 9981 limits. Belt slip safety ≥${c.minSF.toFixed(2)}. FEAD efficiency ${c.eta.toFixed(1)}%. System is optimally configured.`,
+    'COMPLIANT': `All design parameters within Reference PDF and ISO 9981 limits. Belt slip safety ≥${c.minSF.toFixed(2)}. FEAD efficiency ${c.eta.toFixed(1)}%. System is optimally configured.`,
     'MARGINAL':  `Some parameters approaching design limits. Review highlighted items. Min slip SF=${c.minSF.toFixed(2)}, FEAD η=${c.eta.toFixed(1)}%. Adjustments recommended.`,
     'NON-COMPLIANT': `One or more parameters outside design envelope. Immediate attention required. Risk of belt slip, premature bearing failure, or reduced efficiency.`
   };
@@ -2639,7 +2639,7 @@ function renderComplianceParamTable(c) {
   const rows = [
     {
       param:'Engine RPM', current:state.rpm, ideal:1200, min:800, max:1800, unit:'RPM',
-      score: state.rpm>=800&&state.rpm<=1800 ? 100 : 50, note:'Gates PDF design reference'
+      score: state.rpm>=800&&state.rpm<=1800 ? 100 : 50, note:'Reference PDF design reference'
     },
     {
       param:'Belt Tension', current:state.baseTension, ideal:c.T_opt, min:1800, max:3500, unit:'N',
@@ -2783,7 +2783,7 @@ function renderComplianceMaintenance(c) {
   const tasks = [
     {
       color:'#4fc3f7', interval:`${beltInspH}h`, task:'Belt Visual Inspection',
-      detail:`Check for cracking, glazing, rib separation, and longitudinal cracks. Inspect pulley grooves for wear. Verify belt tension with Gates frequency meter.`,
+      detail:`Check for cracking, glazing, rib separation, and longitudinal cracks. Inspect pulley grooves for wear. Verify belt tension with Reference frequency meter.`,
       checks:['Rib surface smooth & intact','No glazing or oil contamination','Pulley grooves free of debris'],
       urgency, urgColor
     },
@@ -2795,8 +2795,8 @@ function renderComplianceMaintenance(c) {
     },
     {
       color:'#f472b6', interval:`${beltReplH}h`, task:'Belt Replacement',
-      detail:`Replace Gates MT820 8-rib AMD belt. At current load factor (${(loadFactor*100).toFixed(0)}% of PDF peak), belt fatigue life reaches replacement threshold at ~${beltReplH}h. Do not over-run.`,
-      checks:['Use Gates MT820 8PK AMD','Re-tension to '+c.T_opt+'N after install','Run 30min then re-check tension'],
+      detail:`Replace Reference MT820 8-rib AMD belt. At current load factor (${(loadFactor*100).toFixed(0)}% of PDF peak), belt fatigue life reaches replacement threshold at ~${beltReplH}h. Do not over-run.`,
+      checks:['Use Reference MT820 8PK AMD','Re-tension to '+c.T_opt+'N after install','Run 30min then re-check tension'],
       urgency, urgColor
     },
     {
@@ -2829,31 +2829,31 @@ function renderComplianceRules(c) {
       icon:'🔩', cls: sf>=1.3?'cr-pass':'cr-warn',
       title:`Capstan Safety Factor ≥ 1.3 (ISO 9981)`,
       text:`Current minimum SF = ${sf.toFixed(2)}. The Eytelwein equation requires T_tight/T_slack = e^(μθ). With μ=0.35 (PK belt, grooved pulley), each pulley must maintain SF>1.3 to prevent slip during transient loads.`,
-      ref:`ISO 9981:2018 · Gates Engineering Manual §4.3 · Current: SF=${sf.toFixed(2)} ${sf>=1.3?'✅':'⚠'}`
+      ref:`ISO 9981:2018 · Reference Engineering Manual §4.3 · Current: SF=${sf.toFixed(2)} ${sf>=1.3?'✅':'⚠'}`
     },
     {
       icon:'⚙', cls: parseFloat(c.fd.totals.eta)>=96?'cr-pass':'cr-warn',
-      title:`FEAD Efficiency ≥ 96% (Gates MT820 Spec)`,
-      text:`Current η = ${eta.toFixed(1)}%. Gates MT820 AMD aramid belt specification guarantees 97–98.5% under nominal conditions. Losses from belt bending (C_b=0.0012), bearing friction (μ_b=0.003), and centrifugal effects must be minimised.`,
-      ref:`Gates MT820 AMD Datasheet · Aramid C_b = 0.0012 · Current: ${eta.toFixed(1)}% ${eta>=96?'✅':'⚠'}`
+      title:`FEAD Efficiency ≥ 96% (Reference MT820 Spec)`,
+      text:`Current η = ${eta.toFixed(1)}%. Reference MT820 AMD aramid belt specification guarantees 97–98.5% under nominal conditions. Losses from belt bending (C_b=0.0012), bearing friction (μ_b=0.003), and centrifugal effects must be minimised.`,
+      ref:`Reference MT820 AMD Datasheet · Aramid C_b = 0.0012 · Current: ${eta.toFixed(1)}% ${eta>=96?'✅':'⚠'}`
     },
     {
       icon:'📏', cls: 'cr-pass',
       title:`Hub Loads Within PDF Certified Peaks`,
-      text:`All computed hub forces must remain ≤ PDF peak values (CRK: 2658.9N, FAN: 2866.4N, ALT: 1235.2N, AC: 1381.4N). These are the values Gates used to select the bearing specification. Exceeding them shortens L10 life proportionally to the cube of force ratio.`,
-      ref:`Gates PDF Sheet 1 · C&U WR25153 Page 4 · L10 ∝ (C/F)^3`
+      text:`All computed hub forces must remain ≤ PDF peak values (CRK: 2658.9N, FAN: 2866.4N, ALT: 1235.2N, AC: 1381.4N). These are the values Reference used to select the bearing specification. Exceeding them shortens L10 life proportionally to the cube of force ratio.`,
+      ref:`Reference PDF Sheet 1 · C&U WR25153 Page 4 · L10 ∝ (C/F)^3`
     },
     {
       icon:'🌡', cls: c.v>=8&&c.v<=22?'cr-pass':'cr-warn',
       title:`Belt Speed 8–22 m/s (Optimal Window)`,
       text:`Current v = ${c.v.toFixed(1)} m/s. Below 8 m/s: same power requires very high tension (T=P/v). Above 22 m/s: centrifugal tension T_c = mv²/L reduces effective clamping tension and increases bending fatigue frequency.`,
-      ref:`Gates Belt Design Manual §3.2 · Current: ${c.v.toFixed(1)} m/s ${c.v>=8&&c.v<=22?'✅':'⚠'}`
+      ref:`Reference Belt Design Manual §3.2 · Current: ${c.v.toFixed(1)} m/s ${c.v>=8&&c.v<=22?'✅':'⚠'}`
     },
     {
       icon:'🎯', cls: Math.abs(state.baseTension - c.T_opt) < 300 ? 'cr-pass':'cr-warn',
       title:`Tension Within ±200N of Computed Optimum`,
       text:`Optimal tension = ${c.T_opt} N (for SF=1.3 at ${state.rpm} RPM). Current = ${state.baseTension} N (${state.baseTension>c.T_opt?'over':'under'}-tensioned by ${Math.abs(state.baseTension-c.T_opt)} N). Over-tensioning increases bearing load and reduces L10. Under-tensioning risks belt slip and glazing.`,
-      ref:`Computed via Capstan equation · Gates tensioner spring spec · T_opt = ${c.T_opt} N`
+      ref:`Computed via Capstan equation · Reference tensioner spring spec · T_opt = ${c.T_opt} N`
     },
     {
       icon:'🔋', cls: 'cr-info',
@@ -2902,7 +2902,7 @@ function drawPageHeader(doc, C, ML, PW, dateStr) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(...C.muted);
-  doc.text('Gates MT820 8PK AMD  \u00b7  Ashok Leyland H6  \u00b7  ' + dateStr, PW - ML, 12, { align: 'right' });
+  doc.text('Reference MT820 8PK AMD  \u00b7  H6 OEM Engine  \u00b7  ' + dateStr, PW - ML, 12, { align: 'right' });
 }
 
 // ── Main generator ────────────────────────────────────────────────────────────
@@ -3100,9 +3100,9 @@ function generatePDFReport() {
 
     // Info table
     const coverRows = [
-      ['Engine / Platform', 'Ashok Leyland H6  \u00b7  24V 1.3SR 130CC'],
-      ['Belt System',       'Gates Micro-V MT820 8PK AMD (Aramid)'],
-      ['Analysis Standard', 'Gates PDF DB Ver 2.45.0.0  \u00b7  ISO 9981:2018'],
+      ['Engine / Platform', 'H6 OEM Engine  \u00b7  24V 1.3SR 130CC'],
+      ['Belt System',       'Micro-V MT820 8PK AMD (Aramid)'],
+      ['Analysis Standard', 'Reference PDF DB Ver 2.45.0.0  \u00b7  ISO 9981:2018'],
       ['Bearing Reference', 'C&U Group WR25153 (QZ20230803)'],
       ['Operating Point',   snapRPM + ' RPM  \u00b7  ' + snapTen + ' N  \u00b7  ' + TEN_POS[snapIdx].label],
       ['Report Date',       dateStr],
@@ -3129,7 +3129,7 @@ function generatePDFReport() {
     doc.setFontSize(11);
     doc.setTextColor(...vFg);
     const vText = sc >= 85
-      ? 'COMPLIANT \u2014 All FEAD parameters within Gates PDF + ISO 9981 design envelope.'
+      ? 'COMPLIANT \u2014 All FEAD parameters within Reference PDF + ISO 9981 design envelope.'
       : sc >= 65
         ? 'MARGINAL \u2014 Some parameters approaching limits. See Section 11 for actions.'
         : 'NON-COMPLIANT \u2014 Parameters outside design envelope. Immediate action required.';
@@ -3140,14 +3140,14 @@ function generatePDFReport() {
     doc.setFontSize(8.5);
     doc.setTextColor(...C.muted);
     doc.text('CONFIDENTIAL TECHNICAL DOCUMENT  \u00b7  Generated from live FEAD simulation model', PW / 2, PH - 14, { align: 'center' });
-    doc.text('All values computed from Gates PDF certified data  \u00b7  C&U WR25153 fan bearing reference', PW / 2, PH - 9, { align: 'center' });
+    doc.text('All values computed from Reference PDF certified data  \u00b7  C&U WR25153 fan bearing reference', PW / 2, PH - 9, { align: 'center' });
 
     // ══════════════════════════════════════════════════════════════════════
     // PAGE 2  EXECUTIVE SUMMARY + SYSTEM CONFIG
     // ══════════════════════════════════════════════════════════════════════
     newPage();
     section('1. Executive Summary');
-    para('This report provides a detailed technical analysis of the Front End Accessory Drive (FEAD) system for the Ashok Leyland H6 engine with Gates MT820 8PK AMD aramid belt. The study covers belt slip safety margins, hub load compliance against PDF certified limits, mechanical efficiency, tension optimisation, drive cycle worst-case analysis, and maintenance scheduling. All physics models are derived from Gates PDF DB Ver 2.45.0.0 and validated against C&U Group WR25153 fan bearing calculations.');
+    para('This report provides a detailed technical analysis of the Front End Accessory Drive (FEAD) system for the H6 OEM Engine engine with Reference MT820 8PK AMD aramid belt. The study covers belt slip safety margins, hub load compliance against PDF certified limits, mechanical efficiency, tension optimisation, drive cycle worst-case analysis, and maintenance scheduling. All physics models are derived from Reference PDF DB Ver 2.45.0.0 and validated against C&U Group WR25153 fan bearing calculations.');
 
     subhead('Key Findings at ' + snapRPM + ' RPM  \u00b7  ' + snapTen + ' N  \u00b7  ' + TEN_POS[snapIdx].label);
     statusAutoT(
@@ -3172,7 +3172,7 @@ function generatePDFReport() {
     autoT(
       [['Parameter', 'Value', 'Notes']],
       [
-        ['Belt Part Number',          'Gates MT820  8PK AMD',                     'Aramid Multi-V, 8-rib PK profile'],
+        ['Belt Part Number',          'Reference MT820  8PK AMD',                     'Aramid Multi-V, 8-rib PK profile'],
         ['Effective Length',          (BELT_PARAMS.belt_length_m * 1000) + ' mm', 'ISO 9981 effective length'],
         ['Linear Mass',               (BELT_PARAMS.mass_per_m * 1000).toFixed(0) + ' g/m', 'Low mass aramid cord'],
         ['Belt Speed @ ' + snapRPM + ' RPM',  v.toFixed(2) + ' m/s',              'v = \u03c0 \u00b7 D_CRK \u00b7 n / 60000'],
@@ -3201,7 +3201,7 @@ function generatePDFReport() {
     // ══════════════════════════════════════════════════════════════════════
     newPage();
     section('3. Belt Slip Analysis \u2014 Conditions for Slip-Free Operation');
-    para('Belt slip occurs when T_tight / T_slack exceeds the Eytelwein capstan limit e^(\u03bc\u03b8). The Slip Safety Factor (SF) measures margin before slip. SF < 1.0 = belt is slipping now. SF 1.0\u20131.3 = marginal risk. SF \u2265 1.3 = safe per Gates Engineering Manual \u00a74.3 and ISO 9981:2018. Back-side contacts (IDR, TEN) use \u03bc = 0.25.');
+    para('Belt slip occurs when T_tight / T_slack exceeds the Eytelwein capstan limit e^(\u03bc\u03b8). The Slip Safety Factor (SF) measures margin before slip. SF < 1.0 = belt is slipping now. SF 1.0\u20131.3 = marginal risk. SF \u2265 1.3 = safe per Reference Engineering Manual \u00a74.3 and ISO 9981:2018. Back-side contacts (IDR, TEN) use \u03bc = 0.25.');
 
     subhead('Per-Pulley Capstan Analysis at ' + snapRPM + ' RPM  /  ' + snapTen + ' N Tension');
     statusAutoT(
@@ -3226,7 +3226,7 @@ function generatePDFReport() {
          'T_opt = ' + fd.totals.T_opt + ' N  |  Current = ' + snapTen + ' N  \u2192  ' +
          (snapTen >= parseInt(fd.totals.T_opt) ? '\u2713 SATISFIED' : '\u2717 INCREASE to ' + fd.totals.T_opt + ' N immediately')],
         ['R2', 'Wrap angles per PDF geometry',
-         'All wrap angles from Gates PDF Sheet 2. IDR/TEN back-side \u226525\u00b0. Larger wrap raises e^(\u03bc\u03b8) limit.'],
+         'All wrap angles from Reference PDF Sheet 2. IDR/TEN back-side \u226525\u00b0. Larger wrap raises e^(\u03bc\u03b8) limit.'],
         ['R3', 'Belt in clean, unworn condition',
          'Glazed / oil-soaked belt: \u03bc drops 0.35 \u2192 0.15. All SFs fall 57%. Replace immediately if contaminated.'],
         ['R4', 'Tensioner arm at MEAN position',
@@ -3247,9 +3247,9 @@ function generatePDFReport() {
     // ══════════════════════════════════════════════════════════════════════
     newPage();
     section('4. Hub Load Analysis \u2014 PDF Certified Limits');
-    para('Hub loads are the resultant bearing forces from the vector sum of incoming and outgoing belt span tensions. All values are compared to the Gates PDF certified peak values. Exceeding these limits shortens bearing L10 life proportionally to (F_actual / F_rated)\u00b3 per ISO 281.');
+    para('Hub loads are the resultant bearing forces from the vector sum of incoming and outgoing belt span tensions. All values are compared to the Reference PDF certified peak values. Exceeding these limits shortens bearing L10 life proportionally to (F_actual / F_rated)\u00b3 per ISO 281.');
 
-    subhead('Per-Pulley Hub Load vs Gates PDF Limits');
+    subhead('Per-Pulley Hub Load vs Reference PDF Limits');
     statusAutoT(
       [['Pulley', 'T_in (N)', 'T_out (N)', 'F_hub (N)', 'Dir (\u00b0)', 'PDF Peak (N)', 'PDF Dir (\u00b0)', '\u0394F (N)', 'Status']],
       ORDER.map(n => {
@@ -3294,7 +3294,7 @@ function generatePDFReport() {
     // ══════════════════════════════════════════════════════════════════════
     newPage();
     section('5. FEAD Efficiency Analysis');
-    para('FEAD efficiency = fraction of crankshaft power delivered to accessories. Power losses arise from belt bending hysteresis, bearing friction, belt slip, and centrifugal effects. Target: \u03b7 \u2265 96% per Gates MT820 AMD specification. Aramid cord reduces bending loss by \u223333% vs steel cord.');
+    para('FEAD efficiency = fraction of crankshaft power delivered to accessories. Power losses arise from belt bending hysteresis, bearing friction, belt slip, and centrifugal effects. Target: \u03b7 \u2265 96% per Reference MT820 AMD specification. Aramid cord reduces bending loss by \u223333% vs steel cord.');
 
     subhead('Power Flow & Loss Breakdown  at  ' + snapRPM + ' RPM');
     autoT(
@@ -3336,7 +3336,7 @@ function generatePDFReport() {
         ['Centrifugal tension T_c',         fd.totals.Tc + ' N',                 'm_b \u00b7 v\u00b2 / L = ' + BELT_PARAMS.mass_per_m + ' \u00d7 ' + parseFloat(v).toFixed(2) + '\u00b2 / ' + BELT_PARAMS.belt_length_m],
         ['Fuel penalty from losses',        fd.totals.fuel_pen + ' g / h extra', 'Based on ' + BELT_PARAMS.fuel_g_per_kWh + ' g/kWh diesel BSFC'],
         ['CO\u2082 impact from losses',     fd.totals.co2_pen + ' kg / h',       'Based on ' + BELT_PARAMS.co2_per_kW + ' kg CO\u2082 per kW parasitic'],
-        ['Recommended action',              'Set tension to ' + fd.totals.T_opt + ' N', 'Verify with Gates frequency gauge after 30 min run-in']
+        ['Recommended action',              'Set tension to ' + fd.totals.T_opt + ' N', 'Verify with Reference frequency gauge after 30 min run-in']
       ],
       { 0: { cellWidth: 66, fontStyle: 'bold' }, 1: { cellWidth: 36 }, 2: { cellWidth: 72 } }
     );
@@ -3380,16 +3380,16 @@ function generatePDFReport() {
     autoT(
       [['Parameter', 'C&U Document Value', 'Interpretation']],
       [
-        ['Fan Speed Ratio i',        '1.3',                   'Gates SR = 1.302 \u2014 \u0394 = 0.002, within tolerance \u2713'],
+        ['Fan Speed Ratio i',        '1.3',                   'Reference SR = 1.302 \u2014 \u0394 = 0.002, within tolerance \u2713'],
         ['Working RPM',              '2400 RPM',              'Peak condition used for life calculation'],
-        ['Dynamic imbalance F_r',    '358 N',                 'Radial centrifugal load \u2014 not in Gates model (separate source)'],
+        ['Dynamic imbalance F_r',    '358 N',                 'Radial centrifugal load \u2014 not in Reference model (separate source)'],
         ['Cr (roller-end)',          '38,179 N',              'Rated dynamic load capacity, roller bearing (impeller end)'],
         ['Cr (ball-end)',            '19,035 N',              'Rated dynamic load capacity, ball bearing (pulley end)'],
         ['L10A \u2014 impeller end', '17,820 h',              'Long life \u2014 NOT the limiting component'],
         ['L10B \u2014 pulley / belt end', '3,860 h',          'Belt-side ball bearing \u2014 LIFE-LIMITING component'],
         ['L10 Composite',           '3,305 h',               'System worst-case \u2014 use for maintenance planning'],
         ['Replacement threshold',   '2,975 h  (90% of L10)', 'Replace before 90% L10 to prevent in-service failure'],
-        ['C&U Page 3 tensioner',    'Different coord. system','C&U analyses fan sub-tensioner. Not directly comparable to Gates serpentine TEN.']
+        ['C&U Page 3 tensioner',    'Different coord. system','C&U analyses fan sub-tensioner. Not directly comparable to Reference serpentine TEN.']
       ],
       { 0: { cellWidth: 52, fontStyle: 'bold' }, 1: { cellWidth: 44 }, 2: { cellWidth: 78 } }
     );
@@ -3420,7 +3420,7 @@ function generatePDFReport() {
         ['Pulley Groove Inspection',   bIH + ' h',  'With belt inspection',
          'Inspect groove depth, surface cracks, embedded debris. Realign if offset > 1 mm.'],
         ['Belt Replacement',           bRH + ' h',  'Or at any slip / glazing sign',
-         'Fit Gates MT820 8PK AMD only. Tension to ' + fd.totals.T_opt + ' N. Run 30 min then re-check.'],
+         'Fit Reference MT820 8PK AMD only. Tension to ' + fd.totals.T_opt + ' N. Run 30 min then re-check.'],
         ['Fan Bearing Replacement',    brH + ' h',  'Or at noise / vibration onset',
          'Replace C&U WR25153 set (roller + ball together). Verify fan balance \u2264 G6.3.'],
         ['FEAD Alignment Check',       'Annual / 2000 h', 'After any pulley / bearing work',
@@ -3430,20 +3430,20 @@ function generatePDFReport() {
     );
 
     gap(2);
-    section('10. Design Rules Compliance \u2014 Gates / ISO 9981 / C&U');
+    section('10. Design Rules Compliance \u2014 Reference / ISO 9981 / C&U');
     statusAutoT(
       [['Design Rule', 'Standard', 'Current Value', 'Status']],
       [
         ['Capstan SF \u2265 1.3 for all pulleys',
-         'ISO 9981:2018 \u00b7 Gates \u00a74.3',
+         'ISO 9981:2018 \u00b7 Reference \u00a74.3',
          'Min SF = ' + comp.minSF.toFixed(2),
          comp.minSF >= 1.3 ? 'PASS' : comp.minSF >= 1.0 ? 'WARN' : 'FAIL'],
         ['FEAD efficiency \u03b7 \u2265 96%',
-         'Gates MT820 AMD spec',
+         'Reference MT820 AMD spec',
          '\u03b7 = ' + fd.totals.eta + '%',
          parseFloat(fd.totals.eta) >= 96 ? 'PASS' : 'WARN'],
         ['Belt speed 8 \u2013 22 m/s',
-         'Gates Belt Design Manual',
+         'Reference Belt Design Manual',
          v.toFixed(2) + ' m/s',
          v >= 8 && v <= 22 ? 'PASS' : 'WARN'],
         ['Tension within \u00b1200 N of T_opt',
@@ -3451,7 +3451,7 @@ function generatePDFReport() {
          '\u0394 = ' + (snapTen - parseInt(fd.totals.T_opt)) + ' N',
          Math.abs(snapTen - parseInt(fd.totals.T_opt)) <= 300 ? 'PASS' : 'WARN'],
         ['All hub loads \u2264 PDF peaks',
-         'Gates PDF DB 2.45.0.0',
+         'Reference PDF DB 2.45.0.0',
          'Worst = ' + (Math.max(...ORDER.map(n => snapHub[n] ? snapHub[n].F / PDF[n].F : 0)) * 100).toFixed(0) + '% of PDF',
          ORDER.every(n => !snapHub[n] || snapHub[n].F <= PDF[n].F) ? 'PASS' : 'FAIL'],
         ['Fan bearing life \u2265 3305 h',
@@ -3459,7 +3459,7 @@ function generatePDFReport() {
          'L10 composite = 3305 h',
          'INFO'],
         ['Belt free of contamination',
-         'Gates Install Guide \u00a76',
+         'Standard Install Guide \u00a76',
          'Visual inspection required',
          'CHECK']
       ],
@@ -3490,7 +3490,7 @@ function generatePDFReport() {
     if (T0r < Toptr * 0.85)
       recs.push(['HIGH', 'Belt Under-Tensioned',
         'Current ' + T0r + ' N is ' + Math.round((1 - T0r / Toptr) * 100) + '% below optimum. Slip risk during transient and high-temperature operation.',
-        'Increase pre-load to ' + Toptr + ' N. Verify with Gates sonic tension gauge after 30 min run-in.']);
+        'Increase pre-load to ' + Toptr + ' N. Verify with Reference sonic tension gauge after 30 min run-in.']);
 
     if (T0r > Toptr * 1.5)
       recs.push(['HIGH', 'Belt Over-Tensioned',
@@ -3503,7 +3503,7 @@ function generatePDFReport() {
         (parseFloat(fd.totals.P_bend) > parseFloat(fd.totals.P_bear)
           ? 'bending hysteresis (increase pulley diameters or use stiffer aramid cord).'
           : 'bearing friction (reduce hub loads via routing optimisation).'),
-        'Review pulley layout and span lengths. Confirm Gates MT820 AMD aramid specification is used.']);
+        'Review pulley layout and span lengths. Confirm Reference MT820 AMD aramid specification is used.']);
 
     if (P.FAN > 8)
       recs.push(['MEDIUM', 'High FAN Load',
@@ -3567,7 +3567,7 @@ function generatePDFReport() {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
       doc.setTextColor(...C.muted);
-      doc.text('FEAD Technical Analysis  \u00b7  Gates MT820  \u00b7  Ashok Leyland H6  \u00b7  ' + dateStr, ML, PH - 8);
+      doc.text('FEAD Technical Analysis  \u00b7  Reference MT820  \u00b7  H6 OEM Engine  \u00b7  ' + dateStr, ML, PH - 8);
       doc.text('Page ' + i + ' of ' + totalPages, PW - MR, PH - 8, { align: 'right' });
       doc.setDrawColor(...C.blue);
       doc.setLineWidth(0.25);
@@ -4219,7 +4219,7 @@ function renderSimPanel() {
       <div class="mat-section-hdr" style="margin-top:1rem">MATLAB / Simulink Model</div>
       <div class="sim-eq-block">
 <pre style="color:#34d399;font-size:0.72rem;line-height:1.8">
-% FEAD friction model — Ashok Leyland H6
+% FEAD friction model — H6 OEM Engine
 % u = [RPM; T0; AC_state]
 v   = pi * D_CRK * RPM / 60e3;       % belt speed [m/s]
 dT_AC = (P_AC * AC_state) / v;       % extra tension [N]
@@ -4644,24 +4644,24 @@ function renderDiscrepancyPanel() {
       title: '3 — Coordinate System: C&U Report Uses Fan-Shaft Local Datum',
       color: '#a78bfa',
       rows: [
-        ['Gates PDF datum','Global XY: CRK at (0,0), all pulleys absolute'],
+        ['Reference PDF datum','Global XY: CRK at (0,0), all pulleys absolute'],
         ['C&U WR25153 datum','Fan-shaft local coords — tensioner position in fan-shaft reference frame'],
-        ['TEN hub load: Gates PDF','608.5 N (global)'],
+        ['TEN hub load: Reference PDF','608.5 N (global)'],
         ['TEN hub load: C&U method','438.6 N (local fan-shaft) — same physics, different reference'],
         ['Fan bearing load: C&U','P_ball=1669.5 N, P_roller=5298.5 N (combined shaft, includes gravity + dynamic)'],
-        ['Website tensioner hub','Computed from vector geometry in global Gates datum — matches Gates, not C&U'],
+        ['Website tensioner hub','Computed from vector geometry in global Reference datum — matches Reference, not C&U'],
       ]
     },
     {
-      title: '4 — Hub Load Formula: Gates Vector Sum vs C&U Shaft Reaction',
+      title: '4 — Hub Load Formula: Reference Vector Sum vs C&U Shaft Reaction',
       color: '#4fc3f7',
       rows: [
-        ['Gates formula','F_hub = √(T_in² + T_out² − 2·T_in·T_out·cos(π−θ))'],
+        ['Reference formula','F_hub = √(T_in² + T_out² − 2·T_in·T_out·cos(π−θ))'],
         ['C&U formula','Shaft bearing reaction = resultant of belt radial force + rotor weight + dynamic unbalance'],
-        ['CRK hub Gates PDF','2658.9 N (belt vector sum only)'],
-        ['FAN hub Gates PDF','2866.4 N — highest in system (large wrap + high tension both sides)'],
+        ['CRK hub Reference PDF','2658.9 N (belt vector sum only)'],
+        ['FAN hub Reference PDF','2866.4 N — highest in system (large wrap + high tension both sides)'],
         ['C&U fan shaft load','P_ball=1669.5 N — lower because C&U splits into two bearing reactions'],
-        ['Website method','Matches Gates formula: F = √(T_in²+T_out²−2·T_in·T_out·cos(π−θ_wrap))'],
+        ['Website method','Matches Reference formula: F = √(T_in²+T_out²−2·T_in·T_out·cos(π−θ_wrap))'],
       ]
     },
     {
@@ -4673,7 +4673,7 @@ function renderDiscrepancyPanel() {
         ['Website η calculation','η = P_accessories / (P_accessories + P_bending + P_bearing + P_slip)'],
         ['Website current η',fd.totals.eta+'%'],
         ['Expected range','94–98% depending on RPM and tension (literature: typical FEAD η = 93–97%)'],
-        ['Validation','Losses match ISO 9981 / Gates engineering guide methodology'],
+        ['Validation','Losses match ISO 9981 / Reference engineering guide methodology'],
       ]
     },
     {
