@@ -358,10 +358,6 @@ function draw2D() {
   const avgF = Object.values(hubData).reduce((s, d) => s + (d ? d.F : 0), 0) / ORDER.length;
   const beltWidth = Math.max(2, Math.min(6, 2 + avgF / 800));
 
-  // Centroid of all pulleys (used to determine which side is "outside")
-  const centX = ORDER.reduce((s,n) => s + PULLEYS[n].x, 0) / ORDER.length;
-  const centY = ORDER.reduce((s,n) => s + PULLEYS[n].y, 0) / ORDER.length;
-
   ctx.save();
   ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 10;
   ctx.strokeStyle = '#ffd700'; ctx.lineWidth = beltWidth;
@@ -383,19 +379,10 @@ function draw2D() {
     const aIn  = Math.atan2(sIn.t2.y  - p.y, sIn.t2.x  - p.x);
     const aOut = Math.atan2(sOut.t1.y - p.y, sOut.t1.x - p.x);
 
-    // Determine wrap direction: try CW and CCW, pick the one whose
-    // midpoint is FARTHER from the centroid (= outside of the belt loop)
-    function arcMid(a1, a2, ccw) {
-      let sweep = ccw ? (a2 - a1) : (a1 - a2);
-      if (sweep < 0) sweep += 2 * Math.PI;
-      const mid = ccw ? (a1 + sweep / 2) : (a1 - sweep / 2);
-      return { x: p.x + p.r * Math.cos(mid), y: p.y + p.r * Math.sin(mid) };
-    }
-    const midCCW = arcMid(aIn, aOut, true);
-    const midCW  = arcMid(aIn, aOut, false);
-    const distCCW = Math.hypot(midCCW.x - centX, midCCW.y - centY);
-    const distCW  = Math.hypot(midCW.x  - centX, midCW.y  - centY);
-    const goCCW = distCCW >= distCW;
+    // Serpentine belt wrap is always < 180° — always take the shorter arc
+    let sweepCCW = aOut - aIn;
+    if (sweepCCW < 0) sweepCCW += 2 * Math.PI;
+    const goCCW = sweepCCW <= Math.PI;
 
     // Draw polyline arc along boundary (16 segments for smoothness)
     const SEGS = 16;
