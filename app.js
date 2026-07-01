@@ -354,7 +354,7 @@ function draw2D() {
   ctx.save(); ctx.translate(12, 52); ctx.rotate(-Math.PI/2);
   ctx.fillStyle = '#44ff44'; ctx.fillText('Y (mm)', 0, 0); ctx.restore();
 
-  // ── Belt path — tangent lines + boundary arcs along every pulley ─────────
+  // ── Belt path — straight lines through pulley centres ─────────
   const avgF = Object.values(hubData).reduce((s, d) => s + (d ? d.F : 0), 0) / ORDER.length;
   const beltWidth = Math.max(2, Math.min(6, 2 + avgF / 800));
 
@@ -365,44 +365,10 @@ function draw2D() {
   ctx.lineDashOffset = dashOffset2D;
 
   ctx.beginPath();
-  let beltStarted = false;
-
   for (let i = 0; i < ORDER.length; i++) {
-    const n    = ORDER[i];
-    const prev = ORDER[(i - 1 + ORDER.length) % ORDER.length];
-    const p    = PULLEYS[n];
-    const sIn  = spans[prev]; // incoming span — arrives at sIn.t2
-    const sOut = spans[n];    // outgoing span — departs from sOut.t1
-    if (!sIn || !sOut) continue;
-
-    // Angles on pulley boundary where belt arrives and departs
-    const aIn  = Math.atan2(sIn.t2.y  - p.y, sIn.t2.x  - p.x);
-    const aOut = Math.atan2(sOut.t1.y - p.y, sOut.t1.x - p.x);
-
-    // Serpentine belt wrap is always < 180° — always take the shorter arc
-    let sweepCCW = aOut - aIn;
-    if (sweepCCW < 0) sweepCCW += 2 * Math.PI;
-    const goCCW = sweepCCW <= Math.PI;
-
-    // Draw polyline arc along boundary (16 segments for smoothness)
-    const SEGS = 16;
-    let sweep = goCCW ? (aOut - aIn) : (aIn - aOut);
-    if (sweep < 0) sweep += 2 * Math.PI;
-
-    if (!beltStarted) {
-      // Start at the arrival tangent point
-      ctx.moveTo(tx(p.x + p.r * Math.cos(aIn)), ty(p.y + p.r * Math.sin(aIn)));
-      beltStarted = true;
-    }
-
-    for (let s = 1; s <= SEGS; s++) {
-      const frac = s / SEGS;
-      const a = goCCW ? (aIn + sweep * frac) : (aIn - sweep * frac);
-      ctx.lineTo(tx(p.x + p.r * Math.cos(a)), ty(p.y + p.r * Math.sin(a)));
-    }
-
-    // Straight span to next pulley's arrival point
-    ctx.lineTo(tx(sOut.t2.x), ty(sOut.t2.y));
+    const p = PULLEYS[ORDER[i]];
+    if (i === 0) ctx.moveTo(tx(p.x), ty(p.y));
+    else ctx.lineTo(tx(p.x), ty(p.y));
   }
   ctx.closePath();
   ctx.stroke();
